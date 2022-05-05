@@ -239,6 +239,11 @@ struct Context {
                typeFlags.includes(other.typeFlags);
     }
 
+    bool roughlySmaller(const Context& other) const {
+        return flags.includes(other.flags) &&
+               typeFlags.includes(other.typeFlags);
+    }
+
     unsigned isImproving(const Context& other, bool hasDotsFormals,
                          bool hasDefaultArgs) const;
 

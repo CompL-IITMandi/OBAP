@@ -14,11 +14,10 @@
 
 using json = nlohmann::json;
 
-#define PRINT_PROGRESS 1
+#define PRINT_PROGRESS 0
 
 
 int main(int argc, char** argv) {
-  std::cout << "argc: " << argc << std::endl;
   if (argc != 3) {
     std::cerr << "Error: No json file passed for anaylsis." << std::endl;
     std::cerr << "Usage: bcp test.json bitcodeFoldersPath" << std::endl;
@@ -112,13 +111,16 @@ int main(int argc, char** argv) {
 
         }
 
-        // for (auto & ele : contextsVec) {
+        // for (auto & currCon : contextsVec) {
+        //   std::cout << "working with context: " << currCon << std::endl;
         //   for (auto & other : contextsVec) {
-        //     if (ele == other) continue;
-        //     std::cout << "c1: " << ele << std::endl;
-        //     std::cout << "c2: " << other << std::endl;
-        //     std::cout << "c1.smaller(c2): " << ele.smaller(other) << std::endl;
-        //     std::cout << "c2.smaller(c1): " << other.smaller(ele) << std::endl;
+        //     if (currCon == other) continue;
+        //     // If c2.smaller(c1) -- c2 is more specialized than c1
+        //     if (other.smaller(currCon)) {
+        //       std::cout << "  " << other << std::endl; 
+        //     } else if (other.roughlySmaller(currCon)) {
+        //       std::cout << "  {R}" << other << std::endl; 
+        //     }
         //   }
         // }
       }

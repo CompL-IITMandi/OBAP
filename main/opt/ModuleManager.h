@@ -9,6 +9,7 @@
 // Include the passes
 #include "opt/passes/RshCallSiteCallerCalleeInfo.h"
 #include "opt/passes/RshCallSiteCounter.h"
+#include "opt/passes/RshArgumentTracking.h"
 
 using namespace llvm;
 
@@ -35,13 +36,16 @@ class ModuleManager {
       PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 
       // Add analysis passes
-      MAM.registerPass([&] { return RshCallSiteCounter(); });
+      // MAM.registerPass([&] { return RshCallSiteCounter(); });
       // MAM.registerPass([&] { return RshCallSiteCallerCalleeInfo(); });
+      MAM.registerPass([&] { return RshArgumentTracking(); });
 
     }
 
     void runPasses(llvm::Module & m) {
       MPM.run(m, MAM);
+
+      MAM.getResult<RshArgumentTracking>(m);
 
       // auto result = MAM.getResult<RshCallSiteCallerCalleeInfo>(m);
       // for (auto & callSiteInfo : result) {
@@ -60,11 +64,11 @@ class ModuleManager {
       //   std::cout << "]" << std::endl;
       // }
 
-      auto callSiteCountRes = MAM.getResult<RshCallSiteCounter>(m);
+      // auto callSiteCountRes = MAM.getResult<RshCallSiteCounter>(m);
 
-      for (auto & ele : callSiteCountRes) {
-        std::cout << "          " << ele.first().str() << ":" << ele.second << "" << std::endl;
-      }
+      // for (auto & ele : callSiteCountRes) {
+      //   std::cout << "          " << ele.first().str() << ":" << ele.second << "" << std::endl;
+      // }
 
     }
 
