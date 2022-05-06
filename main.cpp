@@ -14,7 +14,7 @@
 
 using json = nlohmann::json;
 
-#define PRINT_PROGRESS 0
+#define PRINT_PROGRESS 1
 
 
 int main(int argc, char** argv) {

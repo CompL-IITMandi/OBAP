@@ -45,8 +45,21 @@ class ModuleManager {
     void runPasses(llvm::Module & m) {
       MPM.run(m, MAM);
 
-      MAM.getResult<RshArgumentTracking>(m);
+      auto argTrackRes = MAM.getResult<RshArgumentTracking>(m);
+      for (auto & ele : argTrackRes) {
+        auto currFun = ele.first;
+        auto currFunData = ele.second;
+        std::cout << "        ArgData: " << currFun->getName().str() << std::endl;
+        for (auto & data : currFunData) {
+          std::cout << "          [" << data.first << "]: " << std::endl;
+          int level = 0;
+          for (auto & node : data.second) {
+            std::cout << "             level: " << level++ << ": " << node.getNodeCompressedName() << std::endl;
+          }
 
+        }
+      }
+      
       // auto result = MAM.getResult<RshCallSiteCallerCalleeInfo>(m);
       // for (auto & callSiteInfo : result) {
       //   // outs() << callSiteInfo << "\n";
