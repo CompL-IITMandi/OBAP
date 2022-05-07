@@ -12,6 +12,8 @@
 #include "opt/passes/RshArgumentTracking.h"
 #include "opt/passes/RshArgumentEffectSimple.h"
 
+#include "utils/RshBuiltinsMap.h"
+
 using namespace llvm;
 
 
@@ -37,30 +39,30 @@ class ModuleManager {
       PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 
       // Add analysis passes
-      // MAM.registerPass([&] { return RshCallSiteCounter(); });
+      MAM.registerPass([&] { return RshCallSiteCounter(); });
       // MAM.registerPass([&] { return RshCallSiteCallerCalleeInfo(); });
       // MAM.registerPass([&] { return RshArgumentTracking(); });
-      MAM.registerPass([&] { return RshArgumentEffectSimple(); });
+      // MAM.registerPass([&] { return RshArgumentEffectSimple(); });
     }
 
     void runPasses(llvm::Module & m) {
       MPM.run(m, MAM);
 
-      auto argTrackRes = MAM.getResult<RshArgumentEffectSimple>(m);
-      for (auto & ele : argTrackRes) {
-        auto currFun = ele.first;
-        auto currFunData = ele.second;
-        std::cout << "        ArgData: " << currFun->getName().str() << std::endl;
-        for (auto & data : currFunData) {
-          unsigned argIdx = data.first;
-          auto calledFuns = data.second; 
-          std::cout << "          [" << data.first << "]: ";
-          for (auto & funName : calledFuns) {
-            std::cout << funName << " ";
-          }
-          std::cout << std::endl;
-        }
-      }
+      // auto argTrackRes = MAM.getResult<RshArgumentEffectSimple>(m);
+      // for (auto & ele : argTrackRes) {
+      //   auto currFun = ele.first;
+      //   auto currFunData = ele.second;
+      //   std::cout << "        ArgData: " << currFun->getName().str() << std::endl;
+      //   for (auto & data : currFunData) {
+      //     unsigned argIdx = data.first;
+      //     auto calledFuns = data.second; 
+      //     std::cout << "          [" << data.first << "]: ";
+      //     for (auto & funName : calledFuns) {
+      //       std::cout << funName << " ";
+      //     }
+      //     std::cout << std::endl;
+      //   }
+      // }
       
       // auto argTrackRes = MAM.getResult<RshArgumentTracking>(m);
       // for (auto & ele : argTrackRes) {
@@ -93,11 +95,15 @@ class ModuleManager {
       //   std::cout << "]" << std::endl;
       // }
 
-      // auto callSiteCountRes = MAM.getResult<RshCallSiteCounter>(m);
+      auto callSiteCountRes = MAM.getResult<RshCallSiteCounter>(m);
 
-      // for (auto & ele : callSiteCountRes) {
-      //   std::cout << "          " << ele.first().str() << ":" << ele.second << "" << std::endl;
-      // }
+      unsigned weight = 0;
+
+      for (auto & ele : callSiteCountRes) {
+        weight += RshBuiltinWeights::getWeight(ele.first().str());
+        // std::cout << "          " << ele.first().str() << "[" << RshBuiltinWeights::getWeight(ele.first().str()) << "]" << ":" << ele.second << "" << std::endl;
+      }
+      std::cout << "            WEIGHT: " << weight << std::endl;
 
     }
 

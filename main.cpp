@@ -12,10 +12,13 @@
 #include "opt/ModuleManager.h"
 #include "utils/hasse.h"
 
+#include "utils/RshBuiltinsMap.h"
+
 using json = nlohmann::json;
 
 #define PRINT_PROGRESS 1
 
+std::unordered_map<std::string, unsigned> RshBuiltinWeights::weightMap;
 
 int main(int argc, char** argv) {
   if (argc != 3) {
@@ -33,6 +36,8 @@ int main(int argc, char** argv) {
     std::cerr << "Unable to open json at: " << jsonFileLocation << std::endl;
     exit(EXIT_FAILURE);
   }
+
+  RshBuiltinWeights::init();
 
   
 
