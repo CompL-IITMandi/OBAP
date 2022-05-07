@@ -10,6 +10,7 @@
 #include "opt/passes/RshCallSiteCallerCalleeInfo.h"
 #include "opt/passes/RshCallSiteCounter.h"
 #include "opt/passes/RshArgumentTracking.h"
+#include "opt/passes/RshArgumentEffectSimple.h"
 
 using namespace llvm;
 
@@ -38,27 +39,42 @@ class ModuleManager {
       // Add analysis passes
       // MAM.registerPass([&] { return RshCallSiteCounter(); });
       // MAM.registerPass([&] { return RshCallSiteCallerCalleeInfo(); });
-      MAM.registerPass([&] { return RshArgumentTracking(); });
-
+      // MAM.registerPass([&] { return RshArgumentTracking(); });
+      MAM.registerPass([&] { return RshArgumentEffectSimple(); });
     }
 
     void runPasses(llvm::Module & m) {
       MPM.run(m, MAM);
 
-      auto argTrackRes = MAM.getResult<RshArgumentTracking>(m);
+      auto argTrackRes = MAM.getResult<RshArgumentEffectSimple>(m);
       for (auto & ele : argTrackRes) {
         auto currFun = ele.first;
         auto currFunData = ele.second;
         std::cout << "        ArgData: " << currFun->getName().str() << std::endl;
         for (auto & data : currFunData) {
-          std::cout << "          [" << data.first << "]: " << std::endl;
-          int level = 0;
-          for (auto & node : data.second) {
-            std::cout << "             level: " << level++ << ": " << node.getNodeCompressedName() << std::endl;
+          unsigned argIdx = data.first;
+          auto calledFuns = data.second; 
+          std::cout << "          [" << data.first << "]: ";
+          for (auto & funName : calledFuns) {
+            std::cout << funName << " ";
           }
-
+          std::cout << std::endl;
         }
       }
+      
+      // auto argTrackRes = MAM.getResult<RshArgumentTracking>(m);
+      // for (auto & ele : argTrackRes) {
+      //   auto currFun = ele.first;
+      //   auto currFunData = ele.second;
+      //   std::cout << "        ArgData: " << currFun->getName().str() << std::endl;
+      //   for (auto & data : currFunData) {
+      //     std::cout << "          [" << data.first << "]: " << std::endl;
+      //     int level = 0;
+      //     for (auto & node : data.second) {
+      //       std::cout << "             level: " << level++ << ": " << node.getNodeCompressedName() << std::endl;
+      //     }
+      //   }
+      // }
       
       // auto result = MAM.getResult<RshCallSiteCallerCalleeInfo>(m);
       // for (auto & callSiteInfo : result) {
