@@ -6,7 +6,7 @@
 #include <array>
 #include <cstring>
 #include <iostream>
-
+#include <set>
 enum class TypeAssumption {
     // Arg is already evaluated
     Arg0IsEager_,
@@ -162,21 +162,21 @@ struct Context {
     }
     constexpr Context operator|(const Context& other) const {
 
-        if (missing != other.missing) {
+        // if (missing != other.missing) {
 
-            auto minContext = this;
+        //     auto minContext = this;
 
-            if (missing > other.missing) {
-                minContext = &other;
-            }
+        //     if (missing > other.missing) {
+        //         minContext = &other;
+        //     }
 
-            if (minContext->flags.contains(
-                    Assumption::NoExplicitlyMissingArgs)) {
-                assert(false && "Contexts are not compatible for | operator");
-            }
-        }
+        //     if (minContext->flags.contains(
+        //             Assumption::NoExplicitlyMissingArgs)) {
+        //         assert(false && "Contexts are not compatible for | operator");
+        //     }
+        // }
 
-        auto newMissing = other.missing > missing ? other.missing : missing;
+        auto newMissing = 0;
         return Context(other.flags | flags, other.typeFlags | typeFlags,
                        newMissing);
     }
@@ -242,6 +242,66 @@ struct Context {
     bool roughlySmaller(const Context& other) const {
         return flags.includes(other.flags) &&
                typeFlags.includes(other.typeFlags);
+    }
+
+    std::set<unsigned> getAffectedArguments() {
+        std::set<unsigned> res;
+        if (
+            typeFlags.includes(TypeAssumption::Arg0IsEager_) ||
+            typeFlags.includes(TypeAssumption::Arg0IsNonRefl_) ||
+            typeFlags.includes(TypeAssumption::Arg0IsNotObj_) ||
+            typeFlags.includes(TypeAssumption::Arg0IsSimpleInt_) ||
+            typeFlags.includes(TypeAssumption::Arg0IsSimpleReal_)
+        ) {
+            res.insert(0);
+        }
+        if (
+            typeFlags.includes(TypeAssumption::Arg1IsEager_) ||
+            typeFlags.includes(TypeAssumption::Arg1IsNonRefl_) ||
+            typeFlags.includes(TypeAssumption::Arg1IsNotObj_) ||
+            typeFlags.includes(TypeAssumption::Arg1IsSimpleInt_) ||
+            typeFlags.includes(TypeAssumption::Arg1IsSimpleReal_)
+        ) {
+            res.insert(1);
+        }
+        if (
+            typeFlags.includes(TypeAssumption::Arg2IsEager_) ||
+            typeFlags.includes(TypeAssumption::Arg2IsNonRefl_) ||
+            typeFlags.includes(TypeAssumption::Arg2IsNotObj_) ||
+            typeFlags.includes(TypeAssumption::Arg2IsSimpleInt_) ||
+            typeFlags.includes(TypeAssumption::Arg2IsSimpleReal_)
+        ) {
+            res.insert(2);
+        }
+        if (
+            typeFlags.includes(TypeAssumption::Arg3IsEager_) ||
+            typeFlags.includes(TypeAssumption::Arg3IsNonRefl_) ||
+            typeFlags.includes(TypeAssumption::Arg3IsNotObj_) ||
+            typeFlags.includes(TypeAssumption::Arg3IsSimpleInt_) ||
+            typeFlags.includes(TypeAssumption::Arg3IsSimpleReal_)
+        ) {
+            res.insert(3);
+        }
+        if (
+            typeFlags.includes(TypeAssumption::Arg4IsEager_) ||
+            typeFlags.includes(TypeAssumption::Arg4IsNonRefl_) ||
+            typeFlags.includes(TypeAssumption::Arg4IsNotObj_) ||
+            typeFlags.includes(TypeAssumption::Arg4IsSimpleInt_) ||
+            typeFlags.includes(TypeAssumption::Arg4IsSimpleReal_)
+        ) {
+            res.insert(4);
+        }
+        if (
+            typeFlags.includes(TypeAssumption::Arg5IsEager_) ||
+            typeFlags.includes(TypeAssumption::Arg5IsNonRefl_) ||
+            typeFlags.includes(TypeAssumption::Arg5IsNotObj_) ||
+            typeFlags.includes(TypeAssumption::Arg5IsSimpleInt_) ||
+            typeFlags.includes(TypeAssumption::Arg5IsSimpleReal_)
+        ) {
+            res.insert(5);
+        }
+
+        return res;
     }
 
     unsigned isImproving(const Context& other, bool hasDotsFormals,

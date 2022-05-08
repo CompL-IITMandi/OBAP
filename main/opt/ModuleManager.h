@@ -20,14 +20,15 @@ using namespace llvm;
 class ModuleManager {
   private:
     ModulePassManager MPM;
-    ModuleAnalysisManager MAM;
     LoopAnalysisManager LAM;
     FunctionAnalysisManager FAM;
     CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
     PassBuilder PB;
+    llvm::Module & mod;
   public:
     
-    ModuleManager() {
+    ModuleManager(llvm::Module & m) : mod(m) {
       init();
     }
 
@@ -42,13 +43,21 @@ class ModuleManager {
       MAM.registerPass([&] { return RshCallSiteCounter(); });
       // MAM.registerPass([&] { return RshCallSiteCallerCalleeInfo(); });
       // MAM.registerPass([&] { return RshArgumentTracking(); });
-      // MAM.registerPass([&] { return RshArgumentEffectSimple(); });
+      MAM.registerPass([&] { return RshArgumentEffectSimple(); });
     }
 
-    void runPasses(llvm::Module & m) {
-      MPM.run(m, MAM);
+    RshCallSiteCounter::Result getRshCallSiteCounterRes() {
+      return MAM.getResult<RshCallSiteCounter>(mod);
+    }
 
-      // auto argTrackRes = MAM.getResult<RshArgumentEffectSimple>(m);
+    RshArgumentEffectSimple::Result getRshArgumentEffectSimpleRes() {
+      return MAM.getResult<RshArgumentEffectSimple>(mod);
+    }
+
+    void runPasses() {
+      MPM.run(mod, MAM);
+
+      // auto argTrackRes = MAM.getResult<RshArgumentEffectSimple>(mod);
       // for (auto & ele : argTrackRes) {
       //   auto currFun = ele.first;
       //   auto currFunData = ele.second;
@@ -95,15 +104,15 @@ class ModuleManager {
       //   std::cout << "]" << std::endl;
       // }
 
-      auto callSiteCountRes = MAM.getResult<RshCallSiteCounter>(m);
+      // auto callSiteCountRes = MAM.getResult<RshCallSiteCounter>(m);
 
-      unsigned weight = 0;
+      // unsigned weight = 0;
 
-      for (auto & ele : callSiteCountRes) {
-        weight += RshBuiltinWeights::getWeight(ele.first().str());
-        // std::cout << "          " << ele.first().str() << "[" << RshBuiltinWeights::getWeight(ele.first().str()) << "]" << ":" << ele.second << "" << std::endl;
-      }
-      std::cout << "            WEIGHT: " << weight << std::endl;
+      // for (auto & ele : callSiteCountRes) {
+      //   weight += RshBuiltinWeights::getWeight(ele.first().str());
+      //   // std::cout << "          " << ele.first().str() << "[" << RshBuiltinWeights::getWeight(ele.first().str()) << "]" << ":" << ele.second << "" << std::endl;
+      // }
+      // std::cout << "            WEIGHT: " << weight << std::endl;
 
     }
 
