@@ -21,12 +21,12 @@ using json = nlohmann::json;
 
 #define PRINT_PROGRESS 0
 
-// 0 - directly comparable && counter && argument
+// 0 - callOrderSimilarity || directly comparable && counter && argument
 // 1 - directly comparable && counter
 // 2 - roughly comparable && counter
 // 3 - counter 
 // 4 - counter || argument
-unsigned MASKING_RISK = 4
+unsigned MASKING_RISK = 4;
 
 std::unordered_map<std::string, unsigned> RshBuiltinWeights::weightMap;
 
@@ -36,15 +36,15 @@ int main(int argc, char** argv) {
     exit(EXIT_FAILURE);
   }
 
-  std::stringstream jsonFileLocation;
-
   auto bitcodesFolder = argv[1];
 
+  std::stringstream jsonFileLocation;
   jsonFileLocation << bitcodesFolder << "/summary.json"; 
 
   unsigned counterThreshold = 5;
 
   unsigned argumentEffectDifference = 10;
+
 
   std::ifstream stream(jsonFileLocation.str().c_str());
   if (!stream) {
@@ -52,7 +52,9 @@ int main(int argc, char** argv) {
     exit(EXIT_FAILURE);
   }
 
-  std::ofstream maskDataStream("maskData");
+  std::stringstream maskDataLocation;
+  maskDataLocation << bitcodesFolder << "/maskData"; 
+  std::ofstream maskDataStream(maskDataLocation.str().c_str());
   if (!stream) {
     std::cerr << "Unable to create file maskData" << std::endl;
     exit(EXIT_FAILURE);
@@ -95,7 +97,8 @@ int main(int argc, char** argv) {
 
       std::unordered_map<Context, unsigned> weightAnalysis;
       std::unordered_map<Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > simpleArgumentAnalysis;
-      
+      std::unordered_map<Context, std::vector<std::set<std::string>>> funCallBFData;
+
       for (json::iterator currContext = contextsAvailable.begin(); currContext != contextsAvailable.end(); ++currContext) {
         std::string conStr = currContext.value()["context"];
         unsigned long con = std::stoul(conStr);
@@ -140,6 +143,19 @@ int main(int argc, char** argv) {
           auto currFunData = ele.second;
           if (currFun->getName().str() == mainFunName) {
             simpleArgumentAnalysis[c] = currFunData;
+            break;
+          }
+        }
+
+        auto funcCallBFRes = MM.getFunctionCallBreathFirstRes();
+        for (auto & ele : funcCallBFRes) {
+          auto currFunName = ele.first().str();
+          auto currFunData = ele.second;
+          if (currFunName == mainFunName) {
+            std::vector<std::set<std::string>> fc;
+            for (auto & e : currFunData) fc.push_back(e.getFunctionSet());
+            funCallBFData[c] = fc;
+            break;
           }
         }
         
@@ -162,7 +178,52 @@ int main(int argc, char** argv) {
 
         for (auto & other : contextsVec) {
           if (currCon == other) continue;
+
+          auto uselessCon = other - currCon;
+
           bool counterSimilarity = (weightAnalysis[currCon] - weightAnalysis[other] <= counterThreshold) || (weightAnalysis[other] - weightAnalysis[currCon] <= counterThreshold);
+          
+          auto currV = funCallBFData[currCon];
+          auto otherV = funCallBFData[other];
+          auto levelsInCurrent = currV.size();
+          auto levelsInOther = otherV.size();
+          unsigned callOrderDifference = 0;
+
+          if (levelsInCurrent == levelsInOther) {
+            for (unsigned i = 0; i < levelsInCurrent; i++) {
+              auto v1 = currV[i];
+              auto v2 = otherV[i];
+              std::vector<std::string> diff;
+              //no need to sort since it's already sorted
+              std::set_difference(v1.begin(), v1.end(), v2.begin(), v2.end(),
+                std::inserter(diff, diff.begin()));
+              if (diff.size() > 0) {
+                callOrderDifference++;
+              }
+            }
+          }
+
+          if (levelsInCurrent > 0 && levelsInCurrent == levelsInOther) {
+            if (callOrderDifference == 0) {
+              std::cout << "callOrderDifference: " << callOrderDifference << ", levels: " << levelsInCurrent << std::endl;
+              // for (unsigned i = 0; i < levelsInCurrent; i++) {
+              //   auto v1 = currV[i];
+              //   auto v2 = otherV[i];
+              //   std::cout << "level: " << i << std::endl;
+              //   std::cout << "  v1: ";
+              //   for (auto & i : v1) std::cout << i << " ";
+              //   std::cout << std::endl;
+              //   std::cout << "  v2: ";
+              //   for (auto & i : v2) std::cout << i << " ";
+              //   std::cout << std::endl;
+              // }
+              mask = mask | uselessCon;
+              continue;
+            }
+          }
+
+
+          
 
           bool argEffectSimilarity = false;
           // If c2.smaller(c1) -- c2 is more specialized than c1
@@ -226,7 +287,7 @@ int main(int argc, char** argv) {
           // 3 - counter 
           // 4 - counter || argument
 
-          auto uselessCon = other - currCon;
+          
           bool comparable = other.smaller(currCon);
           bool roughlyComparable = other.roughlySmaller(currCon);
           if (MASKING_RISK == 0) {

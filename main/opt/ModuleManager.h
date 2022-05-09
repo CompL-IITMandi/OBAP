@@ -11,6 +11,7 @@
 #include "opt/passes/RshCallSiteCounter.h"
 #include "opt/passes/RshArgumentTracking.h"
 #include "opt/passes/RshArgumentEffectSimple.h"
+#include "opt/passes/FunctionCallBreathFirst.h"
 
 #include "utils/RshBuiltinsMap.h"
 
@@ -44,6 +45,7 @@ class ModuleManager {
       // MAM.registerPass([&] { return RshCallSiteCallerCalleeInfo(); });
       // MAM.registerPass([&] { return RshArgumentTracking(); });
       MAM.registerPass([&] { return RshArgumentEffectSimple(); });
+      MAM.registerPass([&] { return FunctionCallBreathFirst(); });
     }
 
     RshCallSiteCounter::Result getRshCallSiteCounterRes() {
@@ -54,8 +56,14 @@ class ModuleManager {
       return MAM.getResult<RshArgumentEffectSimple>(mod);
     }
 
+    FunctionCallBreathFirst::Result getFunctionCallBreathFirstRes() {
+      return MAM.getResult<FunctionCallBreathFirst>(mod);
+    }
+
     void runPasses() {
       MPM.run(mod, MAM);
+
+      // MAM.getResult<FunctionCallBreathFirst>(mod);
 
       // auto argTrackRes = MAM.getResult<RshArgumentEffectSimple>(mod);
       // for (auto & ele : argTrackRes) {

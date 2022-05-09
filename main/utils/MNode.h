@@ -1,5 +1,7 @@
 #ifndef UTIL_MNODE_H
 #define UTIL_MNODE_H
+#include "llvm/Analysis/CFG.h"
+#include <sstream>
 class MNode {
   public:
     std::vector<llvm::Instruction *> instructions;
@@ -31,6 +33,27 @@ class MNode {
       for (auto & ele : instructions) {
         llvm::outs() << *ele << "\n";
       }
+    }
+
+    std::set<std::string> getFunctionSet() {
+      std::set<std::string> res;
+      for (auto & ele : instructions) {
+        if (llvm::CallBase * cbInst = llvm::dyn_cast<llvm::CallBase>(ele)) {
+          res.insert(cbInst->getCalledFunction()->getName().str());
+        }
+      }
+      return res;
+    }
+
+    void printFunNames() {
+      for (auto & ele : instructions) {
+        if (llvm::CallBase * cbInst = llvm::dyn_cast<llvm::CallBase>(ele)) {
+          llvm::outs() << "  [F]" << cbInst->getCalledFunction()->getName() << " ";
+        } else {
+          llvm::outs() << "  " << ele->getName() << " ";
+        }
+      }
+      llvm::outs() << "\n";
     }
 
     bool isEmpty() {
