@@ -336,6 +336,17 @@ struct Context {
                        missing - other.missing);
     }
 
+    Context operator+(const Context& other) const {
+        Context c(*this);
+        for (auto i = other.flags.begin(); i != other.flags.end(); ++i) {
+            c.flags.set(*i);
+        }
+        for (auto i = other.typeFlags.begin(); i != other.typeFlags.end(); ++i) {
+            c.typeFlags.set(*i);
+        }
+        return c;
+    }
+
     Flags getFlags() const { return flags; }
 
     TypeFlags getTypeFlags() const { return typeFlags; }

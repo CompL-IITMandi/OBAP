@@ -45,6 +45,7 @@ int main(int argc, char** argv) {
 
   unsigned argumentEffectDifference = 10;
 
+  auto maximumCallOrderDifference = 0.25; // 25% difference is acceptable
 
   std::ifstream stream(jsonFileLocation.str().c_str());
   if (!stream) {
@@ -179,7 +180,23 @@ int main(int argc, char** argv) {
         for (auto & other : contextsVec) {
           if (currCon == other) continue;
 
-          auto uselessCon = other - currCon;
+
+          Context uselessCon;
+
+          if (other.roughlySmaller(currCon)) {
+            uselessCon = other - currCon;
+          } else if (currCon.roughlySmaller(other)) {
+            uselessCon = currCon - other;
+          } else {
+            std::cout << "UKN CASE" << std::endl;
+            std::cout << "curr: " << currCon << std::endl;
+            std::cout << "other: " << other << std::endl;
+            std::cout << "curr - other: " << currCon - other << std::endl;
+            std::cout << "other - curr: " << other - currCon << std::endl;
+            std::cout << "(curr - other) + (other - curr)" << (currCon - other) + (other - currCon) << std::endl;
+            uselessCon = (currCon - other) + (other - currCon);
+          }
+          
 
           bool counterSimilarity = (weightAnalysis[currCon] - weightAnalysis[other] <= counterThreshold) || (weightAnalysis[other] - weightAnalysis[currCon] <= counterThreshold);
           
@@ -189,7 +206,7 @@ int main(int argc, char** argv) {
           auto levelsInOther = otherV.size();
           unsigned callOrderDifference = 0;
 
-          if (levelsInCurrent == levelsInOther) {
+          if (levelsInCurrent > 0 && levelsInCurrent == levelsInOther) {
             for (unsigned i = 0; i < levelsInCurrent; i++) {
               auto v1 = currV[i];
               auto v2 = otherV[i];
@@ -201,27 +218,32 @@ int main(int argc, char** argv) {
                 callOrderDifference++;
               }
             }
-          }
-
-          if (levelsInCurrent > 0 && levelsInCurrent == levelsInOther) {
-            if (callOrderDifference == 0) {
-              std::cout << "callOrderDifference: " << callOrderDifference << ", levels: " << levelsInCurrent << std::endl;
-              // for (unsigned i = 0; i < levelsInCurrent; i++) {
-              //   auto v1 = currV[i];
-              //   auto v2 = otherV[i];
-              //   std::cout << "level: " << i << std::endl;
-              //   std::cout << "  v1: ";
-              //   for (auto & i : v1) std::cout << i << " ";
-              //   std::cout << std::endl;
-              //   std::cout << "  v2: ";
-              //   for (auto & i : v2) std::cout << i << " ";
-              //   std::cout << std::endl;
-              // }
+            std::cout << "callOrderDifference: " << (callOrderDifference/levelsInCurrent)*100 << "%, levels: " << levelsInCurrent << std::endl;
+            if (callOrderDifference > 0) {
+              std::cout << "DIFF CASE" << std::endl;
+            } else {
+              std::cout << "SAME CASE" << std::endl;
+            }
+            for (unsigned i = 0; i < levelsInCurrent; i++) {
+              auto v1 = currV[i];
+              auto v2 = otherV[i];
+              std::cout << "level: " << i << std::endl;
+              std::cout << "  v1: ";
+              for (auto & i : v1) std::cout << i << " ";
+              std::cout << " || ";
+              std::cout << "  v2: ";
+              for (auto & i : v2) std::cout << i << " ";
+              std::cout << std::endl;
+            }
+            if ((callOrderDifference/levelsInCurrent) <= maximumCallOrderDifference) {
+              std::cout << "[DIFF]" << uselessCon << std::endl;
+              if (counterSimilarity) {
+                std::cout << "UN COMPARABLE BUT HIGH SIMILARITY" << std::endl;
+              }
               mask = mask | uselessCon;
               continue;
             }
           }
-
 
           
 
