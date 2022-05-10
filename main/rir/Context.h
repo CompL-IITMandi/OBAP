@@ -244,7 +244,7 @@ struct Context {
                typeFlags.includes(other.typeFlags);
     }
 
-    std::set<unsigned> getAffectedArguments() {
+    std::set<unsigned> getAffectedArguments() const {
         std::set<unsigned> res;
         if (
             typeFlags.includes(TypeAssumption::Arg0IsEager_) ||
@@ -304,6 +304,53 @@ struct Context {
         return res;
     }
 
+    Context getArgRelatedAssumptions(unsigned arg) {
+        Context res;
+        if (arg == 0) {
+            if (typeFlags.includes(TypeAssumption::Arg0IsEager_)) res.typeFlags.set(TypeAssumption::Arg0IsEager_);
+            if (typeFlags.includes(TypeAssumption::Arg0IsNonRefl_)) res.typeFlags.set(TypeAssumption::Arg0IsNonRefl_);
+            if (typeFlags.includes(TypeAssumption::Arg0IsNotObj_)) res.typeFlags.set(TypeAssumption::Arg0IsNotObj_);
+            if (typeFlags.includes(TypeAssumption::Arg0IsSimpleInt_)) res.typeFlags.set(TypeAssumption::Arg0IsSimpleInt_);
+            if (typeFlags.includes(TypeAssumption::Arg0IsSimpleReal_)) res.typeFlags.set(TypeAssumption::Arg0IsSimpleReal_);
+        }
+        else if (arg == 1) {
+            if (typeFlags.includes(TypeAssumption::Arg1IsEager_)) res.typeFlags.set(TypeAssumption::Arg1IsEager_);
+            if (typeFlags.includes(TypeAssumption::Arg1IsNonRefl_)) res.typeFlags.set(TypeAssumption::Arg1IsNonRefl_);
+            if (typeFlags.includes(TypeAssumption::Arg1IsNotObj_)) res.typeFlags.set(TypeAssumption::Arg1IsNotObj_);
+            if (typeFlags.includes(TypeAssumption::Arg1IsSimpleInt_)) res.typeFlags.set(TypeAssumption::Arg1IsSimpleInt_);
+            if (typeFlags.includes(TypeAssumption::Arg1IsSimpleReal_)) res.typeFlags.set(TypeAssumption::Arg1IsSimpleReal_);
+        }
+        else if (arg == 2) {
+            if (typeFlags.includes(TypeAssumption::Arg2IsEager_)) res.typeFlags.set(TypeAssumption::Arg2IsEager_);
+            if (typeFlags.includes(TypeAssumption::Arg2IsNonRefl_)) res.typeFlags.set(TypeAssumption::Arg2IsNonRefl_);
+            if (typeFlags.includes(TypeAssumption::Arg2IsNotObj_)) res.typeFlags.set(TypeAssumption::Arg2IsNotObj_);
+            if (typeFlags.includes(TypeAssumption::Arg2IsSimpleInt_)) res.typeFlags.set(TypeAssumption::Arg2IsSimpleInt_);
+            if (typeFlags.includes(TypeAssumption::Arg2IsSimpleReal_)) res.typeFlags.set(TypeAssumption::Arg2IsSimpleReal_);
+        }
+        else if (arg == 3) {
+            if (typeFlags.includes(TypeAssumption::Arg3IsEager_)) res.typeFlags.set(TypeAssumption::Arg3IsEager_);
+            if (typeFlags.includes(TypeAssumption::Arg3IsNonRefl_)) res.typeFlags.set(TypeAssumption::Arg3IsNonRefl_);
+            if (typeFlags.includes(TypeAssumption::Arg3IsNotObj_)) res.typeFlags.set(TypeAssumption::Arg3IsNotObj_);
+            if (typeFlags.includes(TypeAssumption::Arg3IsSimpleInt_)) res.typeFlags.set(TypeAssumption::Arg3IsSimpleInt_);
+            if (typeFlags.includes(TypeAssumption::Arg3IsSimpleReal_)) res.typeFlags.set(TypeAssumption::Arg3IsSimpleReal_);
+        }
+        else if (arg == 4) {
+            if (typeFlags.includes(TypeAssumption::Arg4IsEager_)) res.typeFlags.set(TypeAssumption::Arg4IsEager_);
+            if (typeFlags.includes(TypeAssumption::Arg4IsNonRefl_)) res.typeFlags.set(TypeAssumption::Arg4IsNonRefl_);
+            if (typeFlags.includes(TypeAssumption::Arg4IsNotObj_)) res.typeFlags.set(TypeAssumption::Arg4IsNotObj_);
+            if (typeFlags.includes(TypeAssumption::Arg4IsSimpleInt_)) res.typeFlags.set(TypeAssumption::Arg4IsSimpleInt_);
+            if (typeFlags.includes(TypeAssumption::Arg4IsSimpleReal_)) res.typeFlags.set(TypeAssumption::Arg4IsSimpleReal_);
+        }
+        else if (arg == 5) {
+            if (typeFlags.includes(TypeAssumption::Arg5IsEager_)) res.typeFlags.set(TypeAssumption::Arg5IsEager_);
+            if (typeFlags.includes(TypeAssumption::Arg5IsNonRefl_)) res.typeFlags.set(TypeAssumption::Arg5IsNonRefl_);
+            if (typeFlags.includes(TypeAssumption::Arg5IsNotObj_)) res.typeFlags.set(TypeAssumption::Arg5IsNotObj_);
+            if (typeFlags.includes(TypeAssumption::Arg5IsSimpleInt_)) res.typeFlags.set(TypeAssumption::Arg5IsSimpleInt_);
+            if (typeFlags.includes(TypeAssumption::Arg5IsSimpleReal_)) res.typeFlags.set(TypeAssumption::Arg5IsSimpleReal_);
+        }
+        return res;
+    }
+
     unsigned isImproving(const Context& other, bool hasDotsFormals,
                          bool hasDefaultArgs) const;
 
@@ -351,7 +398,7 @@ struct Context {
 
     TypeFlags getTypeFlags() const { return typeFlags; }
 
-  private:
+//   private:
     Flags flags;
     TypeFlags typeFlags;
     uint8_t missing = 0;
