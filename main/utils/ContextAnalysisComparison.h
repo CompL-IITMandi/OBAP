@@ -9,11 +9,13 @@ class ContextAnalysisComparison {
     Context c1, c2;
     ComparisonType type;
   public:
-    static unsigned AGRESSION;
+    static unsigned STRICTNESS;
     static unsigned THRESHOLD_WEIGHT;
     static unsigned THRESHOLD_FUNCALL;
     static unsigned THRESHOLD_ARGEFFECT;
-    ContextAnalysisComparison(Context con1, Context con2, ComparisonType t) : c1(con1), c2(con2), type(t) {} 
+    ContextAnalysisComparison(Context con1, Context con2, ComparisonType t) : c1(con1), c2(con2), type(t) {}
+
+    Context getDiff();
 
     Context getMask(
       std::unordered_map<Context, unsigned> & weightAnalysis,

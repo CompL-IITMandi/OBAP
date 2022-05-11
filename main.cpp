@@ -68,6 +68,9 @@ int main(int argc, char** argv) {
   json processedJson;
   stream >> processedJson;
 
+  unsigned funCount = 0;
+  unsigned masked = 0;
+
   iterateOverBitcodes(
     processedJson,
     [&] (
@@ -80,14 +83,17 @@ int main(int argc, char** argv) {
       auto contextsAvailable = contextMap.size();
       if (contextsAvailable == 1) return; // Nothing to process when we cant compare
       std::cout << "File: " << meta << std::endl;
-      std::cout << "  Hast: " << hast << std::endl;
-      std::cout << "  Name: " << name << std::endl;
-      std::cout << "  Offset: " << offset << std::endl;
-      std::cout << "  Contexts Available: " << contextsAvailable << std::endl;
+      std::cout << "  [HAST]: " << hast << std::endl;
+      // std::cout << "  Name: " << name << std::endl;
+      // std::cout << "  Offset: " << offset << std::endl;
+      // std::cout << "  Contexts Available: " << contextsAvailable << std::endl;
+      funCount++;
 
       std::stringstream pathPrefix;
       pathPrefix << bitcodesFolder << "/" << hast << "_" << offset << "_";
-      std::cout << "  Prefix Path: " << pathPrefix.str() << std::endl;
+      // std::cout << "  Prefix Path: " << pathPrefix.str() << std::endl;
+
+      Context mask;
 
       doAnalysisOverContexts(
         pathPrefix.str(),
@@ -99,25 +105,34 @@ int main(int argc, char** argv) {
           std::unordered_map<Context, std::vector<std::set<std::string>>> & funCallBFData
         )  {
           compareContexts(contextsVec, [&] (Context & c1, Context & c2, const ComparisonType & t) {
-            if (t == ComparisonType::STRICT) {
-              std::cout << "    [STRICT]: " << c1 << " || " << c2 << std::endl;
-            } else if (t == ComparisonType::ROUGH) {
-              std::cout << "    [ROUGH]: " << c1 << " || " << c2 << std::endl;
-            } else if (t == ComparisonType::DIFFZEROMISS) {
-              std::cout << "    [DIFFZEROMISS]: " << c1 << " || " << c2 << std::endl;
-            } else if (t == ComparisonType::DIFFSAMEMISS) {
-              std::cout << "    [DIFFSAMEMISS]: " << c1 << " || " << c2 << std::endl;
-            } else if (t == ComparisonType::DIFFDIFFMISS) {
-              std::cout << "    [DIFFDIFFMISS]: " << c1 << " || " << c2 << std::endl;
-            }
+            // if (t == ComparisonType::STRICT) {
+            //   std::cout << "    [STRICT]: " << c1 << " || " << c2 << std::endl;
+            // } else if (t == ComparisonType::ROUGH) {
+            //   std::cout << "    [ROUGH]: " << c1 << " || " << c2 << std::endl;
+            // } else if (t == ComparisonType::DIFFZEROMISS) {
+            //   std::cout << "    [DIFFZEROMISS]: " << c1 << " || " << c2 << std::endl;
+            // } else if (t == ComparisonType::DIFFSAMEMISS) {
+            //   std::cout << "    [DIFFSAMEMISS]: " << c1 << " || " << c2 << std::endl;
+            // } else if (t == ComparisonType::DIFFDIFFMISS) {
+            //   std::cout << "    [DIFFDIFFMISS]: " << c1 << " || " << c2 << std::endl;
+            // }
 
             ContextAnalysisComparison cac(c1, c2, t);
-            std::cout << "      [MASK]: " << cac.getMask(weightAnalysis, simpleArgumentAnalysis, funCallBFData) << std::endl;
+            mask = mask + cac.getMask(weightAnalysis, simpleArgumentAnalysis, funCallBFData);
+
+            // std::cout << "      [MASK]: " << cac.getMask(weightAnalysis, simpleArgumentAnalysis, funCallBFData) << std::endl;
           });
         }
       );
+
+      std::cout << "  [MASK]: " << mask << std::endl;
+      if (mask.toI() != 0) {
+        masked++;
+      }
     }
   );
+
+  std::cout << "Total: " << funCount << ", masked: " << masked << std::endl;
   maskDataStream.close();
   return 0;
 }
