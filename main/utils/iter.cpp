@@ -98,6 +98,8 @@ void doAnalysisOverContexts(const std::string & pathPrefix, json & contextMap, A
 
 
 void compareContexts(std::vector<Context> & contextsVec, ComparisonCallback call) {
+  static unsigned comparisonLevel = getenv("CLEVEL") ? std::stoi(getenv("CLEVEL")) : 4;
+
   for (auto it_currCon = contextsVec.begin(); it_currCon != contextsVec.end(); ++it_currCon) {
     auto it_other = it_currCon + 1;
     while (it_other != contextsVec.end()) {
@@ -111,24 +113,22 @@ void compareContexts(std::vector<Context> & contextsVec, ComparisonCallback call
         call(other, currCon, ComparisonType::STRICT);
       }
       // Roughly comparable
-      else if (other.roughlySmaller(currCon)) {
+      else if (other.roughlySmaller(currCon) && comparisonLevel > 0) {
         call(currCon, other, ComparisonType::ROUGH);
-      } else if (currCon.roughlySmaller(other)) {
+      } else if (currCon.roughlySmaller(other) && comparisonLevel > 0) {
         call(other, currCon, ComparisonType::ROUGH);
       }
       // Num Missing == 0
-      else if (currCon.missing == 0 && other.missing == 0) {
+      else if (currCon.missing == 0 && other.missing == 0 && comparisonLevel > 1) {
         call(other, currCon, ComparisonType::DIFFZEROMISS);
       }
       // Num Missing a == Num Missing b
-      else if (currCon.missing == other.missing) {
+      else if (currCon.missing == other.missing && comparisonLevel > 2) {
         call(other, currCon, ComparisonType::DIFFSAMEMISS);
       }
       // Num Missing a != Num Missing b
-      else if (currCon.missing != other.missing) {
+      else if (currCon.missing != other.missing && comparisonLevel > 3) {
         call(other, currCon, ComparisonType::DIFFDIFFMISS);
-      } else {
-        std::cerr << "Unhandled context comparison case" << std::endl;
       }
 
 

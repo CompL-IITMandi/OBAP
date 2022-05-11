@@ -159,6 +159,15 @@ Context ContextAnalysisComparison::getDiff() {
   return Context(0ul);
 }
 
+bool ContextAnalysisComparison::safeToRemoveContext(const Context & mask) {
+  if (type == ComparisonType::STRICT) {
+    if (mask.toI() == getDiff().toI()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 Context ContextAnalysisComparison::getMask(
   std::unordered_map<Context, unsigned> & weightAnalysis,
   std::unordered_map<Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > & simpleArgumentAnalysis,

@@ -21,15 +21,6 @@
 
 using json = nlohmann::json;
 
-#define PRINT_PROGRESS 0
-
-// 0 - callOrderSimilarity || directly comparable && counter && argument
-// 1 - directly comparable && counter
-// 2 - roughly comparable && counter
-// 3 - counter 
-// 4 - counter || argument
-unsigned MASKING_RISK = 4;
-
 std::unordered_map<std::string, unsigned> RshBuiltinWeights::weightMap;
 
 int main(int argc, char** argv) {
@@ -70,6 +61,8 @@ int main(int argc, char** argv) {
 
   unsigned funCount = 0;
   unsigned masked = 0;
+  unsigned removed = 0;
+  unsigned totalContexts = 0;
 
   iterateOverBitcodes(
     processedJson,
@@ -86,7 +79,7 @@ int main(int argc, char** argv) {
       std::cout << "  [HAST]: " << hast << std::endl;
       // std::cout << "  Name: " << name << std::endl;
       // std::cout << "  Offset: " << offset << std::endl;
-      // std::cout << "  Contexts Available: " << contextsAvailable << std::endl;
+      std::cout << "  [CONTEXTS AVAILABLE]: " << contextsAvailable << std::endl;
       funCount++;
 
       std::stringstream pathPrefix;
@@ -94,6 +87,8 @@ int main(int argc, char** argv) {
       // std::cout << "  Prefix Path: " << pathPrefix.str() << std::endl;
 
       Context mask;
+
+      std::set<unsigned long> toRemove;
 
       doAnalysisOverContexts(
         pathPrefix.str(),
@@ -104,6 +99,7 @@ int main(int argc, char** argv) {
           std::unordered_map<Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > & simpleArgumentAnalysis,
           std::unordered_map<Context, std::vector<std::set<std::string>>> & funCallBFData
         )  {
+          totalContexts += contextsVec.size();
           compareContexts(contextsVec, [&] (Context & c1, Context & c2, const ComparisonType & t) {
             // if (t == ComparisonType::STRICT) {
             //   std::cout << "    [STRICT]: " << c1 << " || " << c2 << std::endl;
@@ -118,21 +114,34 @@ int main(int argc, char** argv) {
             // }
 
             ContextAnalysisComparison cac(c1, c2, t);
-            mask = mask + cac.getMask(weightAnalysis, simpleArgumentAnalysis, funCallBFData);
-
+            auto currMask = cac.getMask(weightAnalysis, simpleArgumentAnalysis, funCallBFData);
+            if (cac.safeToRemoveContext(currMask)) {
+              toRemove.insert(c2.toI());
+            }
+            mask = mask + currMask;
             // std::cout << "      [MASK]: " << cac.getMask(weightAnalysis, simpleArgumentAnalysis, funCallBFData) << std::endl;
           });
         }
       );
 
       std::cout << "  [MASK]: " << mask << std::endl;
+      maskDataStream << hast << "," << offset << "," << mask.toI() << std::endl;
+      std::cout << "  [DEPRECATED CONTEXTS]: [";
+      removed += toRemove.size();
+      for (auto & ele : toRemove) {
+        std::cout << ele << " ";
+        // maskDataStream << hast << "," << offset << "," << mask.toI() << std::endl;
+      }
+      std::cout << "]" << std::endl;
+      
       if (mask.toI() != 0) {
         masked++;
       }
+
     }
   );
 
-  std::cout << "Total: " << funCount << ", masked: " << masked << std::endl;
+  std::cout << "Total Functions: " << funCount << ", Masked Functions: " << masked << ", Total Contexts: " << totalContexts << ", Removed Contexts: " << removed << std::endl;
   maskDataStream.close();
   return 0;
 }

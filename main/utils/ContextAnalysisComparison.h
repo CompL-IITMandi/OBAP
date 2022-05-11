@@ -17,6 +17,8 @@ class ContextAnalysisComparison {
 
     Context getDiff();
 
+    bool safeToRemoveContext(const Context & mask);
+
     Context getMask(
       std::unordered_map<Context, unsigned> & weightAnalysis,
       std::unordered_map<Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > & simpleArgumentAnalysis,
