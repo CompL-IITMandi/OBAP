@@ -6,6 +6,12 @@
 
 LLVM binaries can be downloaded directly from the [LLVM releases](https://github.com/llvm/llvm-project/releases).
 
+It is recommended that the same version that was used to serialize the bitcodes is used to process them aswell. If rsh is already setup then you can simply point the -DLLVM_DIR in cmake to the external/llvm-12 folder as follows.
+
+```console
+cmake -DLLVM_DIR=/PATH_TO_RSH/external/llvm-12 -DR_BUILD=/PATH/GNUR ..
+```
+
 #### 2. Building GNUR
 
 Download the GNUR from [CRAN](https://cran.r-project.org/).
