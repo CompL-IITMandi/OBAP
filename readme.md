@@ -30,7 +30,7 @@ lib/libRblas.so  lib/libRlapack.so  lib/libR.so
 ```
 
 ### Installation
-```
+```console
 mkdir build
 cd build
 cmake -DLLVM_DIR=/PATH/LLVM -DR_BUILD=/PATH/GNUR ..
