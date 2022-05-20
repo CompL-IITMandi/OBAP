@@ -1,21 +1,40 @@
 # Offline bitcode analysis and processing for Rsh serialized LLVM bitcodes
 
-## Setting LLVM path
-Update the LLVM_DIR in the CMakeLists.txt to point to the llvm version you want to use.
+### Prerequisites
+
+#### 1. LLVM
+
+LLVM binaries can be downloaded directly from the [LLVM releases](https://github.com/llvm/llvm-project/releases).
+
+#### 2. Building GNUR
+
+Download the GNUR from [CRAN](https://cran.r-project.org/).
+
+This project was built and tested using GNUR 4.4.1 and can be found at [GNUR 4.1.1](https://cran.r-project.org/src/base/R-4/R-4.1.1.tar.gz).
+```console
+# Extract the R-4.1.1.tar.gz into a folder (lets say /PATH/GNUR)
+cd /PATH/GNUR
+# Configure the project (--with-x --with-readline are optional)
+./configure --with-x --with-readline --enable-R-shlib
+# Make the project
+make
+# After building the project it should give you these three files
+ls lib/*.so
+lib/libRblas.so  lib/libRlapack.so  lib/libR.so
+```
 
 ### Installation
 ```
 mkdir build
 cd build
-cmake ..
+cmake -DLLVM_DIR=/PATH/LLVM -DR_BUILD=/PATH/GNUR ..
 make
 ```
 
 ### Usage
-The first argument to bcp is the path to the processed json file.
-The second argument is the path that contains the folders that are to be processed. The folders that are to be analyzed are indicated by the the json so only the outer directory containing the folders is required.
-
+It requires the R_HOME environment variable to be set manually to the path where the GNUR shared library was built (see the Prerequisites section)
+The serializer creates .bc and .meta files, the path containing these files must be passed to the program.
 ```
 cd build
-./bcp ../tests/processedBitcode.json ../tests
+R_HOME=/PATH/GNUR ./bcp /PATH/SERIALIZED_BITCODES_FOLDER
 ```

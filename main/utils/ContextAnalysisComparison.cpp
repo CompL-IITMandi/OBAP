@@ -1,10 +1,8 @@
 #include "utils/ContextAnalysisComparison.h"
 #include <string>
-//
-// 
-//
-//
-//
+
+#define DEBUG_COMPARISONS 0
+
 // Higher STRICTNESS means stricter bounds here
 //  STRICTNESS 1
 //    STRICT
@@ -91,6 +89,16 @@ static std::pair<bool, Context> checkArgEffectSimilarity(Context & c1, Context &
   auto c2AffectedArgs = c2.getAffectedArguments();
   auto diffAffectedArgs = diffCon.getAffectedArguments();
 
+  #if DEBUG_COMPARISONS == 1
+  std::cout << "== checkArgEffectSimilarity ==" << std::endl;
+  std::cout << "c1(" << c1.toI() << "): " << c1 << std::endl;
+  std::cout << "c2(" << c2.toI() << "): " << c2 << std::endl;
+  std::cout << "diffCon: " << diffCon << std::endl;
+  std::cout << "diffAffectedArgs: [";
+  for (auto & ele : diffAffectedArgs) std::cout << ele << " ";
+  std::cout << "]" << std::endl;
+  #endif
+
   bool atleastOneSimilar = false;
 
   std::set<unsigned> allArgs;
@@ -123,14 +131,44 @@ static std::pair<bool, Context> checkArgEffectSimilarity(Context & c1, Context &
         std::set<std::string> v1(c1ArgMap[argIdx].begin(), c1ArgMap[argIdx].end());
         std::set<std::string> v2(c2ArgMap[argIdx].begin(), c2ArgMap[argIdx].end());
         // If this argument remains same, this part of the context can be masked
-        std::vector<std::string> diff;
+        std::vector<std::string> diff1;
         //no need to sort since it's already sorted
         std::set_difference(v1.begin(), v1.end(), v2.begin(), v2.end(),
-          std::inserter(diff, diff.begin()));
+          std::inserter(diff1, diff1.begin()));
+        
+        std::vector<std::string> diff2;
+        //no need to sort since it's already sorted
+        std::set_difference(v2.begin(), v2.end(), v1.begin(), v1.end(),
+          std::inserter(diff2, diff2.begin()));
+        
+        #if DEBUG_COMPARISONS == 1
+        std::cout << "v1: [";
+        for (auto & ele : v1) std::cout << ele << " ";
+        std::cout << "]" << std::endl;
 
-        if (diff.size() == 0) {
+        std::cout << "v2: [";
+        for (auto & ele : v2) std::cout << ele << " ";
+        std::cout << "]" << std::endl;
+
+        std::cout << "diff1: [";
+        for (auto & ele : diff1) std::cout << ele << " ";
+        std::cout << "]" << std::endl;
+
+        std::cout << "diff2: [";
+        for (auto & ele : diff2) std::cout << ele << " ";
+        std::cout << "]" << std::endl;
+        #endif
+
+        if (diff1.size() == 0 && diff2.size() == 0) {
+          #if DEBUG_COMPARISONS == 1
+          // std::cout << "Arg is same: " << argIdx << std::endl;
+          #endif
           maskPart = maskPart + diffCon.getArgRelatedAssumptions(argIdx);
           atleastOneSimilar = true;
+        } else {
+          #if DEBUG_COMPARISONS == 1
+          // std::cout << "Arg is different: " << argIdx << std::endl;
+          #endif
         }
       }
     }

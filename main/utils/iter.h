@@ -6,6 +6,9 @@
 #include <iostream>
 #include <functional>
 #include <set>
+
+typedef struct SEXPREC* SEXP;
+
 using json = nlohmann::json;
 
 class GlobalData {
@@ -43,7 +46,8 @@ typedef std::function<void(
 
 void iterateOverBitcodes(json & processedJson, IterCallback call);
 
-void doAnalysisOverContexts(const std::string & pathPrefix, json & contextMap, AnalysisCallback call);
+// void doAnalysisOverContexts(const std::string & pathPrefix, json & contextMap, AnalysisCallback call);
+void doAnalysisOverContexts(const std::string & pathPrefix, SEXP cDataContainer, AnalysisCallback call);
 
 
 enum ComparisonType {

@@ -19,11 +19,217 @@
 #include "utils/iter.h"
 #include "utils/ContextAnalysisComparison.h"
 
+#include "utils/serializerData.h"
+#include "Rembedded.h"
+#include "dirent.h"
+#include <unistd.h>
+
+#include "Rinternals.h"
 using json = nlohmann::json;
 
 std::unordered_map<std::string, unsigned> RshBuiltinWeights::weightMap;
 
+static void iterateOverMetadatasInDirectory(const char * folderPath) {
+  static SEXP maskSym = Rf_install("mask");
+  DIR *dir;
+  struct dirent *ent;
+  int i = 0;
+  unsigned funCount = 0;
+  unsigned masked = 0;
+  unsigned removed = 0;
+  unsigned totalContexts = 0;
+  if ((dir = opendir(folderPath)) != NULL) {
+    while ((ent = readdir(dir)) != NULL) {
+      std::string fName = ent->d_name;
+      if (fName.find(".meta") != std::string::npos) {
+        std::cout << "Processing " << fName << std::endl;
+        i++;
+
+        std::stringstream metadataPath;
+        metadataPath << folderPath << "/" << fName;
+
+        FILE *reader;
+        reader = fopen(metadataPath.str().c_str(),"r");
+
+        if (!reader) {
+          for (int i = 0; i < 10; i++) {
+            sleep(1);
+            std::cout << "waiting to open: " << metadataPath.str() << std::endl;
+            reader = fopen(metadataPath.str().c_str(),"r");
+            if (reader) break;
+          }
+
+          if (!reader) {
+            std::cout << "unable to open " << metadataPath.str() << std::endl;
+            Rf_error("unable to open file!");
+            continue;
+          }
+        }
+
+        // Initialize the deserializing stream
+        R_inpstream_st inputStream;
+        R_InitFileInPStream(&inputStream, reader, R_pstream_binary_format, NULL, R_NilValue);
+
+        SEXP serDataContainer;
+        PROTECT(serDataContainer = R_Unserialize(&inputStream));
+
+        fclose(reader);
+
+        // Get serialized metadata
+        serializerData sData(serDataContainer);
+        REnvHandler offsetMapHandler(sData.getContextMap());
+
+        
+
+        offsetMapHandler.iterate([&] (SEXP offsetIndex, SEXP contextMap) {
+
+          Context mask;
+          Context oldMask;
+          REnvHandler contextMapHandler(contextMap);
+          if (SEXP existingMaskContainer = contextMapHandler.get(maskSym)){
+            mask = oldMask = Context(*((unsigned long *) DATAPTR(existingMaskContainer)));
+          }
+
+
+          // We are now processing a function, non zero index indicates an inner function
+          std::set<unsigned long> toRemove;
+
+          std::stringstream pathPrefix;
+          pathPrefix << folderPath << "/" << CHAR(PRINTNAME(sData.getHastData())) << "_" << CHAR(PRINTNAME(offsetIndex)) << "_";
+
+          funCount++;
+
+          doAnalysisOverContexts(
+            pathPrefix.str(),
+            contextMap,
+            [&] (
+              std::vector<Context> & contextsVec, 
+              std::unordered_map<Context, unsigned> & weightAnalysis, 
+              std::unordered_map<Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > & simpleArgumentAnalysis,
+              std::unordered_map<Context, std::vector<std::set<std::string>>> & funCallBFData
+            )  {
+              totalContexts += contextsVec.size();
+              compareContexts(contextsVec, [&] (Context & c1, Context & c2, const ComparisonType & t) {
+                // if (t == ComparisonType::STRICT) {
+                //   std::cout << "    [STRICT]: " << c1 << " || " << c2 << std::endl;
+                // } else if (t == ComparisonType::ROUGH) {
+                //   std::cout << "    [ROUGH]: " << c1 << " || " << c2 << std::endl;
+                // } else if (t == ComparisonType::DIFFZEROMISS) {
+                //   std::cout << "    [DIFFZEROMISS]: " << c1 << " || " << c2 << std::endl;
+                // } else if (t == ComparisonType::DIFFSAMEMISS) {
+                //   std::cout << "    [DIFFSAMEMISS]: " << c1 << " || " << c2 << std::endl;
+                // } else if (t == ComparisonType::DIFFDIFFMISS) {
+                //   std::cout << "    [DIFFDIFFMISS]: " << c1 << " || " << c2 << std::endl;
+                // }
+
+                ContextAnalysisComparison cac(c1, c2, t);
+                auto currMask = cac.getMask(weightAnalysis, simpleArgumentAnalysis, funCallBFData);
+                if (cac.safeToRemoveContext(currMask)) {
+                  toRemove.insert(c2.toI());
+                }
+                mask = mask + currMask;
+              });
+            }
+          );
+
+          removed += toRemove.size();
+
+          
+          unsigned numContexts = contextMapHandler.size();
+          if (contextMapHandler.get(maskSym)){
+            numContexts--;
+          }
+
+          
+
+          std::cout << "  [" << CHAR(PRINTNAME(offsetIndex)) << "] (" << numContexts << ")" << std::endl;
+          std::cout << "    [DEPRECATED CONTEXTS]: [";
+
+          for (auto & ele : toRemove) {
+            std::cout << ele;
+            contextMapHandler.remove(Rf_install(std::to_string(ele).c_str()));
+            
+            std::stringstream toRemovePath;
+            toRemovePath << pathPrefix.str() << ele << ".bc";
+            int result = remove(toRemovePath.str().c_str());
+
+            if (result != 0) {
+              std::cout << "(E) ";
+            } else {
+              std::cout << "(S) ";
+            }
+
+          }
+
+          std::cout << "]" << std::endl;
+          if (mask.toI() != 0 && oldMask != mask) {
+            SEXP store;
+            PROTECT(store = Rf_allocVector(RAWSXP, sizeof(unsigned long)));
+            unsigned long * tmp = (unsigned long *) DATAPTR(store);
+            *tmp = mask.toI();
+            contextMapHandler.set(maskSym, store);
+            UNPROTECT(1);
+            masked++;
+          }
+          if (oldMask != mask) {
+            std::cout << "    [NEW MASK]: " << mask << std::endl;
+            std::cout << "    [OLD MASK]: " << oldMask << std::endl;
+          } else {
+            if (oldMask.toI() != 0)
+            std::cout << "    [MASK]: " << oldMask << std::endl;
+          }
+
+        });
+
+
+        R_outpstream_st outputStream;
+        FILE *fptr;
+        fptr = fopen(metadataPath.str().c_str(),"w");
+        if (!fptr) {
+          for (int i = 0; i < 10; i++) {
+            sleep(1);
+            std::cout << "[W]waiting to open: " << metadataPath.str() << std::endl;
+            fptr = fopen(metadataPath.str().c_str(),"w");
+            if (fptr) break;
+          }
+
+          if (!fptr) {
+            std::cout << "[W]unable to open " << metadataPath.str() << std::endl;
+            Rf_error("[W]unable to open file!");
+            continue;
+          }
+        }
+        
+        R_InitFileOutPStream(&outputStream,fptr,R_pstream_binary_format, 0, NULL, R_NilValue);
+        R_Serialize(serDataContainer, &outputStream);
+        fclose(fptr);
+
+        UNPROTECT(1);
+      }
+    }
+  } else {
+    std::cout << "\"" << folderPath << "\" has no metas" << std::endl;
+  }
+
+  std::cout << "=== SUMMARY ===" << std::endl;
+  std::cout << "Total functions processed: " << funCount << std::endl;
+  std::cout << "Functions masked: " << masked << std::endl;
+  std::cout << "Bitcodes processed: " << totalContexts << std::endl;
+  std::cout << "Bitcodes removed: " << removed << std::endl;
+}
+
 int main(int argc, char** argv) {
+
+  bool rHomeSet = getenv("R_HOME") ? true : false;
+
+  if (!rHomeSet) {
+    std::cerr << "R_HOME not set, set this to the GNUR built using the ./configure --enable-R-shlib flag" << std::endl;
+    std::cerr << "Usage: R_HOME=PATH_TO_GNUR_BUILD bcp path_to_folder" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  Rf_initEmbeddedR(argc, argv);
+
   if (argc != 2) {
     std::cerr << "Usage: bcp path_to_folder" << std::endl;
     exit(EXIT_FAILURE);
@@ -32,116 +238,8 @@ int main(int argc, char** argv) {
   auto bitcodesFolder = argv[1];
   GlobalData::bitcodesFolder = bitcodesFolder;
 
-  std::stringstream jsonFileLocation;
-  jsonFileLocation << bitcodesFolder << "/summary.json"; 
+  iterateOverMetadatasInDirectory(bitcodesFolder);
 
-  std::ifstream stream(jsonFileLocation.str().c_str());
-  if (!stream) {
-    std::cerr << "Unable to open json at: " << jsonFileLocation.str() << std::endl;
-    exit(EXIT_FAILURE);
-  }
-
-  std::stringstream maskDataLocation;
-  maskDataLocation << bitcodesFolder << "/maskData"; 
-  std::ofstream maskDataStream(maskDataLocation.str().c_str());
-  if (!stream) {
-    std::cerr << "Unable to create file maskData" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-
-  RshBuiltinWeights::init();
-
-  
-
-  // Load the processed JSON data
-  // We converted the .meta files to JSON to make it easier to work with and 
-  // end dependence on GNUR for doing other things.
-  json processedJson;
-  stream >> processedJson;
-
-  unsigned funCount = 0;
-  unsigned masked = 0;
-  unsigned removed = 0;
-  unsigned totalContexts = 0;
-
-  iterateOverBitcodes(
-    processedJson,
-    [&] (
-          const std::string & meta, 
-          const std::string & hast, 
-          const std::string & name,
-          const std::string & offset, 
-          json & contextMap
-          ) {
-      auto contextsAvailable = contextMap.size();
-      if (contextsAvailable == 1) return; // Nothing to process when we cant compare
-      std::cout << "File: " << meta << std::endl;
-      std::cout << "  [HAST]: " << hast << std::endl;
-      // std::cout << "  Name: " << name << std::endl;
-      // std::cout << "  Offset: " << offset << std::endl;
-      std::cout << "  [CONTEXTS AVAILABLE]: " << contextsAvailable << std::endl;
-      funCount++;
-
-      std::stringstream pathPrefix;
-      pathPrefix << bitcodesFolder << "/" << hast << "_" << offset << "_";
-      // std::cout << "  Prefix Path: " << pathPrefix.str() << std::endl;
-
-      Context mask;
-
-      std::set<unsigned long> toRemove;
-
-      doAnalysisOverContexts(
-        pathPrefix.str(),
-        contextMap,
-        [&] (
-          std::vector<Context> & contextsVec, 
-          std::unordered_map<Context, unsigned> & weightAnalysis, 
-          std::unordered_map<Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > & simpleArgumentAnalysis,
-          std::unordered_map<Context, std::vector<std::set<std::string>>> & funCallBFData
-        )  {
-          totalContexts += contextsVec.size();
-          compareContexts(contextsVec, [&] (Context & c1, Context & c2, const ComparisonType & t) {
-            // if (t == ComparisonType::STRICT) {
-            //   std::cout << "    [STRICT]: " << c1 << " || " << c2 << std::endl;
-            // } else if (t == ComparisonType::ROUGH) {
-            //   std::cout << "    [ROUGH]: " << c1 << " || " << c2 << std::endl;
-            // } else if (t == ComparisonType::DIFFZEROMISS) {
-            //   std::cout << "    [DIFFZEROMISS]: " << c1 << " || " << c2 << std::endl;
-            // } else if (t == ComparisonType::DIFFSAMEMISS) {
-            //   std::cout << "    [DIFFSAMEMISS]: " << c1 << " || " << c2 << std::endl;
-            // } else if (t == ComparisonType::DIFFDIFFMISS) {
-            //   std::cout << "    [DIFFDIFFMISS]: " << c1 << " || " << c2 << std::endl;
-            // }
-
-            ContextAnalysisComparison cac(c1, c2, t);
-            auto currMask = cac.getMask(weightAnalysis, simpleArgumentAnalysis, funCallBFData);
-            if (cac.safeToRemoveContext(currMask)) {
-              toRemove.insert(c2.toI());
-            }
-            mask = mask + currMask;
-            // std::cout << "      [MASK]: " << cac.getMask(weightAnalysis, simpleArgumentAnalysis, funCallBFData) << std::endl;
-          });
-        }
-      );
-
-      std::cout << "  [MASK]: " << mask << std::endl;
-      maskDataStream << hast << "," << offset << "," << mask.toI() << std::endl;
-      std::cout << "  [DEPRECATED CONTEXTS]: [";
-      removed += toRemove.size();
-      for (auto & ele : toRemove) {
-        std::cout << ele << " ";
-        // maskDataStream << hast << "," << offset << "," << mask.toI() << std::endl;
-      }
-      std::cout << "]" << std::endl;
-      
-      if (mask.toI() != 0) {
-        masked++;
-      }
-
-    }
-  );
-
-  std::cout << "Total Functions: " << funCount << ", Masked Functions: " << masked << ", Total Contexts: " << totalContexts << ", Removed Contexts: " << removed << std::endl;
-  maskDataStream.close();
+  Rf_endEmbeddedR(0);
   return 0;
 }
