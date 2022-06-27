@@ -71,6 +71,7 @@ FunctionCallBreathFirst::Result FunctionCallBreathFirst::runOnModule(Module &M) 
 
     res.insert(std::pair<std::string, std::vector<MNode>>(currFunName, fCallData));
     
+    // outs() << currFunName << "\n";
     // unsigned i = 0;
     // for (auto & ele : fCallData) {
     //   outs() << "Level: " << i++ << "\n";

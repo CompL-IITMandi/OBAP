@@ -52,10 +52,8 @@ void doAnalysisOverContexts(const std::string & pathPrefix, SEXP cDataContainer,
 
 enum ComparisonType {
   STRICT,      // Strictly comparable
-  ROUGH,       // Roughly comparable, missingness is different.
-  DIFFZEROMISS,// Not comparable, missingness is zero for both
-  DIFFSAMEMISS,// Not comparable, missingness is same
-  DIFFDIFFMISS // Not comparable, missingness is different
+  ROUGH_EQ,    // Rough comparable - Equal
+  ROUGH_NEQ,   // Rough comparable - Lattice comparable
 };
 
 // ComparisonCallback

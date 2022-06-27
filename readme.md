@@ -32,15 +32,13 @@ lib/libRblas.so  lib/libRlapack.so  lib/libR.so
 ### Installation
 ```bash
 mkdir build
-cd build
-cmake -DLLVM_DIR=/PATH/LLVM -DR_BUILD=/PATH/GNUR ..
-make
+chmod +x build.sh
+./build.sh build /PATH/LLVM /PATH/GNUR
 ```
 
 ### Usage
 It requires the R_HOME environment variable to be set manually to the path where the GNUR shared library was built (see the Prerequisites section)
 The serializer creates .bc and .meta files, the path containing these files must be passed to the program.
 ```bash
-cd build
-R_HOME=/PATH/GNUR ./bcp /PATH/SERIALIZED_BITCODES_FOLDER
+./run.sh /PATH/SERIALIZED_BITCODES_FOLDER
 ```

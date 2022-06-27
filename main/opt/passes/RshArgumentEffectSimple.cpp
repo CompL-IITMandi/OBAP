@@ -6,6 +6,17 @@
 #include "llvm/IR/CFG.h"
 
 
+// class AENode {
+//   public:
+//     void addInstruction(Instruction * i) {
+      
+//     }
+
+//   private:
+//     bool 
+//     std::vector<std::vector<Instruction *>> storage;
+// };
+
 
 using namespace llvm;
 
@@ -57,46 +68,94 @@ RshArgumentEffectSimple::Result RshArgumentEffectSimple::runOnModule(Module &M) 
     funArgMap[&fun] = argValMap;
   }
 
-  std::function<void(llvm::Instruction *, std::set<llvm::Instruction *> &)> recursivelyUpdateUsers = [&] (llvm::Instruction * currInst, std::set<llvm::Instruction *> & alreadyAdded) {
-    if (alreadyAdded.find(currInst) == alreadyAdded.end()) {
-      // get the uses for the currentValue
-      alreadyAdded.insert(currInst);
+  // std::function<void(llvm::Instruction *, std::set<llvm::Instruction *> &)> recursivelyUpdateUsers = [&] (llvm::Instruction * currInst, std::set<llvm::Instruction *> & alreadyAdded) {
+  //   if (alreadyAdded.find(currInst) == alreadyAdded.end()) {
+  //     // get the uses for the currentValue
+  //     alreadyAdded.insert(currInst);
 
-      for (llvm::User *user : currInst->users()) {
-        if (llvm::Instruction * i = dyn_cast<llvm::Instruction>(user)) {
-          recursivelyUpdateUsers(i, alreadyAdded);
-        }
-      }
-    }
-  };
+  //     for (llvm::User *user : currInst->users()) {
+  //       if (llvm::Instruction * i = dyn_cast<llvm::Instruction>(user)) {
+  //         recursivelyUpdateUsers(i, alreadyAdded);
+  //       }
+  //     }
+  //   }
+  // };
 
   // For each function, find the argument effects
   for (auto & ele : funArgMap) {
     std::vector<std::pair< unsigned, std::vector<std::string> > > finalRes;
 
+
+    // Current function under consideration
     auto currFun = ele.first;
+
+    // Mapping from arg idx -> LdArg Instruction
     auto currArgData = ele.second;
     for (auto & data : currArgData) {
+
+      // Arg Idx
       unsigned currArg = data.first;
-      llvm::Instruction * currArgMainInst = data.second;
+      // LdArg instruction
+      llvm::Instruction * genesisArgInsn = data.second;
 
       // List of affected instructions by the current argument
-      std::set<llvm::Instruction *> affectedInstructions;
+      std::set<llvm::Instruction *> alreadyProcessedInsns;
+      std::set<llvm::Instruction *> currInsns;
 
-      // Populate the affected list
-      recursivelyUpdateUsers(currArgMainInst, affectedInstructions);
+      currInsns.insert(genesisArgInsn);
 
-      std::vector<std::string> calledFunctions;
+      std::vector<std::string> leveledData;
+      
+      // Iterate over users recursively
+      do {
+        std::stringstream ss;
+        std::set<llvm::Instruction *> nextInsns;
+        for (auto & insn : currInsns) {
+          // Add the instruction being processed to the list of processed instructions
+          alreadyProcessedInsns.insert(insn);
+          
+          for (llvm::User *user : insn->users()) {
+            if (llvm::Instruction * i = dyn_cast<llvm::Instruction>(user)) {
+              if (llvm::CallBase * cbInst = llvm::dyn_cast<llvm::CallBase>(i)) {
+                auto func = cbInst->getCalledFunction();
+                auto funcName = func->getName().str();
+                ss << funcName << "|";
+                // if (alreadyProcessedInsns.find(i) != alreadyProcessedInsns.end()) errs() << "     " << "(LOOP TO PREVIOUS LEVEL)" << "\n";
+              }
+              
+              if (alreadyProcessedInsns.find(i) == alreadyProcessedInsns.end()) nextInsns.insert(i);
+              
+            }
+          }
 
-      for (auto & i : affectedInstructions) {
-        if (llvm::CallBase * cbInst = llvm::dyn_cast<llvm::CallBase>(i)) {
-          auto func = cbInst->getCalledFunction();
-          auto funcName = func->getName().str();
-          calledFunctions.push_back(funcName);
         }
-      }
 
-      finalRes.push_back(std::pair<unsigned, std::vector<std::string>>(currArg, calledFunctions));
+        if (!ss.str().empty()) leveledData.push_back(ss.str());
+
+        if (nextInsns.size() == 0) break;
+        else currInsns = std::move(nextInsns);
+      } while(true);
+
+      // std::cout << "Arg: " << currArg << std::endl;
+      // unsigned lvl = 0;
+      // for (auto & ele : leveledData) {
+      //   std::cout << "Level " << lvl++ << ": " << ele << std::endl;
+      // }
+
+      // // Populate the affected list
+      // recursivelyUpdateUsers(currArgMainInst, affectedInstructions);
+
+      // std::vector<std::string> calledFunctions;
+
+      // for (auto & i : affectedInstructions) {
+      //   if (llvm::CallBase * cbInst = llvm::dyn_cast<llvm::CallBase>(i)) {
+      //     auto func = cbInst->getCalledFunction();
+      //     auto funcName = func->getName().str();
+      //     calledFunctions.push_back(funcName);
+      //   }
+      // }
+
+      finalRes.push_back(std::pair<unsigned, std::vector<std::string>>(currArg, leveledData));
     }
 
     res.insert(

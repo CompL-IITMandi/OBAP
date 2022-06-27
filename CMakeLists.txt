@@ -62,19 +62,29 @@ include_directories(SYSTEM "${R_BUILD}/include")
 # Set flags
 set(CMAKE_CXX_FLAGS "${LLVM_CXX_FLAGS} ${CMAKE_CXX_FLAGS_LIBCXX} -Wall -Wuninitialized -Wundef -Winit-self -Wcast-align -Woverloaded-virtual -Wmissing-include-dirs -Wstrict-overflow=3 -std=c++14 -fno-rtti -fno-exceptions -Wimplicit-fallthrough -Wno-deprecated-declarations -L/home/meetesh06/compL/BUILDS/CompL/R-4.1.1/lib")
 
+set(CMAKE_EXE_LINKER_FLAGS 
+          "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath -Wl,${R_BUILD}/lib")
+
 
 # Include all headers from main
 include_directories(SYSTEM "./main")
 
 # Add all cpp sources
 file(GLOB_RECURSE SRC "main/opt/*.cpp" "main/rir/*.cpp" "main/utils/*.cpp")
+
 add_executable(${PROJECT_NAME} main.cpp ${SRC})
 
-# Link R shared libraries
-link_directories(${R_BUILD}/lib)
-target_link_libraries(${PROJECT_NAME} libRblas.so)
-target_link_libraries(${PROJECT_NAME} libRlapack.so)
-target_link_libraries(${PROJECT_NAME} libR.so)
+find_library(LIB_R NAMES "libR.so" PATHS ${R_BUILD}/lib NO_DEFAULT_PATH)
+find_library(LIB_RBLAS NAMES "libRblas.so" PATHS ${R_BUILD}/lib NO_DEFAULT_PATH)
+find_library(LIB_RLAPACK NAMES "libRlapack.so" PATHS ${R_BUILD}/lib NO_DEFAULT_PATH)
+
+message("Using libR.so from: ${LIB_R}")
+message("Using libRblas.so from: ${LIB_RBLAS}")
+message("Using libRlapack.so from: ${LIB_RLAPACK}")
+
+target_link_libraries(${PROJECT_NAME} ${LIB_R})
+target_link_libraries(${PROJECT_NAME} ${LIB_RBLAS})
+target_link_libraries(${PROJECT_NAME} ${LIB_RLAPACK})
 
 # Link LLVM libraries
 if (DEFINED LLVM_PACKAGE_VERSION)
