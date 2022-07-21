@@ -4,25 +4,41 @@
 #include "utils/FunctionSignature.h"
 #include "rir/Context.h"
 
-// #include <fstream>
-
-// #include "Rinternals.h"
-
-
 #define PRINT_EXTENDED_CHILDREN 0
 
-class containerDataAbstraction {
-    public:
-        SEXP container;
+    class SerializedPool {
+        // 0 (rir::FunctionSignature) Function Signature
+        // 1 (SEXP) Function Names
+        // 2 (SEXP) Function Src
+        // 3 (SEXP) Function Arglist Order
+        // 4 (SEXP) Children Data,
+        // 5 (SEXP) cPool
+        // 6 (SEXP) sPool
 
-        inline void printSpace(int size) {
+    public:
+
+        // Misc functions
+        static unsigned getStorageSize() {
+            return 7;
+        }
+
+        static void addSEXP(SEXP container, SEXP data, const int & index) {
+            SET_VECTOR_ELT(container, index, data);
+        }
+
+        static SEXP getSEXP(SEXP container, const int & index) {
+            return VECTOR_ELT(container, index);
+        }
+
+        static void printSpace(int size) {
             assert(size >= 0);
             for (int i = 0; i < size; i++) {
                 std::cout << " ";
             }
         }
 
-        void addFS(FunctionSignature fs, int index) {
+        // ENTRY 0: Function Signature
+        static void addFS(SEXP container, const FunctionSignature & fs) {
             SEXP store;
             PROTECT(store = Rf_allocVector(RAWSXP, sizeof(fs)));
             FunctionSignature * tmp = (FunctionSignature *) DATAPTR(store);
@@ -37,238 +53,81 @@ class containerDataAbstraction {
                 #pragma GCC diagnostic pop
             #endif
 
-            SET_VECTOR_ELT(container, index, store);
+            SET_VECTOR_ELT(container, 0, store);
             UNPROTECT(1);
         }
 
-        FunctionSignature getFS(int index) {
-            SEXP dataContainer = VECTOR_ELT(container, index);
+        static FunctionSignature getFS(SEXP container) {
+            SEXP dataContainer = VECTOR_ELT(container, 0);
             FunctionSignature* res = (FunctionSignature *) DATAPTR(dataContainer);
             return *res;
         }
 
-        void addSizeT(size_t data, int index) {
-            SEXP store;
-            PROTECT(store = Rf_allocVector(RAWSXP, sizeof(size_t)));
-            size_t * tmp = (size_t *) DATAPTR(store);
-            *tmp = data;
-            SET_VECTOR_ELT(container, index, store);
-            UNPROTECT(1);
+        // ENTRY 1: Function Names
+        static void addFNames(SEXP container, SEXP data) {
+            addSEXP(container, data, 1);
         }
 
-        size_t getSizeT(int index) {
-            SEXP dataContainer = VECTOR_ELT(container, index);
-            size_t* res = (size_t *) DATAPTR(dataContainer);
-            return *res;
+        static SEXP getFNames(SEXP container) {
+            return VECTOR_ELT(container, 1);
         }
 
-        void addInt(int data, int index) {
-            SEXP store;
-            PROTECT(store = Rf_allocVector(RAWSXP, sizeof(int)));
-            int * tmp = (int *) DATAPTR(store);
-            *tmp = data;
-            SET_VECTOR_ELT(container, index, store);
-            UNPROTECT(1);
+        // ENTRY 2: Function Sources
+        static void addFSrc(SEXP container, SEXP data) {
+            addSEXP(container, data, 2);
         }
 
-        int getInt(int index) {
-            SEXP dataContainer = VECTOR_ELT(container, index);
-            int* res = (int *) DATAPTR(dataContainer);
-            return *res;
-        }
-
-        void addUnsigned(unsigned data, int index) {
-            SEXP store;
-            PROTECT(store = Rf_allocVector(RAWSXP, sizeof(unsigned)));
-            unsigned * tmp = (unsigned *) DATAPTR(store);
-            *tmp = data;
-            SET_VECTOR_ELT(container, index, store);
-            UNPROTECT(1);
-        }
-
-        unsigned getUnsigned(int index) {
-            SEXP dataContainer = VECTOR_ELT(container, index);
-            unsigned* res = (unsigned *) DATAPTR(dataContainer);
-            return *res;
-        }
-
-        void addUnsignedLong(unsigned long data, int index) {
-            SEXP store;
-            PROTECT(store = Rf_allocVector(RAWSXP, sizeof(unsigned long)));
-            unsigned long * tmp = (unsigned long *) DATAPTR(store);
-            *tmp = data;
-            SET_VECTOR_ELT(container, index, store);
-            UNPROTECT(1);
-        }
-
-        unsigned long getUnsignedLong(int index) {
-            SEXP dataContainer = VECTOR_ELT(container, index);
-            unsigned long* res = (unsigned long *) DATAPTR(dataContainer);
-            return *res;
-        }
-
-        void addString(std::string data, int index) {
-            SEXP store;
-            PROTECT(store = Rf_mkString(data.c_str()));
-            SET_VECTOR_ELT(container, index, store);
-            UNPROTECT(1);
-        }
-
-        std::string getString(int index) {
-            SEXP dataContainer = VECTOR_ELT(container, index);
-            return std::string(CHAR(STRING_ELT(dataContainer, 0)));
-        }
-};
-
-class contextData : containerDataAbstraction {
-    // {
-    // 0 (unsigned long) Context
-    // 1 (FunctionSignature) Function Signature
-    // 2 (SEXP) Function Names
-    // 3 (SEXP) Function Src
-    // 4 (SEXP) Function Arglist Order
-    // 5 (SEXP) CPool,
-    // 6 (SEXP) SPool,
-    // 7 (SEXP) Children Data,
-    // 8 (SEXP) reqMapForCompilation
-    // }
-    public:
-        SEXP getContainer() {
-            return container;
-        }
-        explicit contextData(SEXP c) {
-            container = c;
-        }
-
-        // ENTRY 0: Con
-        void addContext(unsigned long data) {
-            addUnsignedLong(data, 0);
-        }
-
-        unsigned long getContext() {
-            return getUnsignedLong(0);
-        }
-
-        // ENTRY 1: Function Signature
-        void addFunctionSignature(FunctionSignature fs) {
-            addFS(fs, 1);
-        }
-
-        FunctionSignature getFunctionSignature() {
-            return getFS(1);
-        }
-
-        // ENTRY 2: Function Names
-        void addFNames(SEXP data) {
-            SET_VECTOR_ELT(container, 2, data);
-        }
-
-        SEXP getFNames() {
+        static SEXP getFSrc(SEXP container) {
             return VECTOR_ELT(container, 2);
         }
 
-        // ENTRY 3: Function Src
-        void addFSrc(SEXP data) {
-            SET_VECTOR_ELT(container, 3, data);
+        // ENTRY 3: Arglist Order
+        static void addFArg(SEXP container, SEXP data) {
+            addSEXP(container, data, 3);
         }
 
-        SEXP getFSrc() {
+        static SEXP getFArg(SEXP container) {
             return VECTOR_ELT(container, 3);
         }
 
-        // ENTRY 4: Function Arglist Order
-        void addFArg(SEXP data) {
-            SET_VECTOR_ELT(container, 4, data);
+        // ENTRY 4: Children Data
+        static void addFChildren(SEXP container, SEXP data) {
+            addSEXP(container, data, 4);
         }
 
-        SEXP getFArg() {
+        static SEXP getFChildren(SEXP container) {
             return VECTOR_ELT(container, 4);
         }
 
-        // ENTRY 5: cPool
-        void addCPool(SEXP data) {
-            SET_VECTOR_ELT(container, 5, data);
+        // ENTRY 5: Constant Pool
+        static void addCpool(SEXP container, SEXP data) {
+            addSEXP(container, data, 5);
         }
 
-        SEXP getCPool() {
+        static SEXP getCpool(SEXP container) {
             return VECTOR_ELT(container, 5);
         }
 
-        // ENTRY 6: sPool
-        void addSPool(SEXP data) {
-            SET_VECTOR_ELT(container, 6, data);
+        // ENTRY 6: Source Pool
+        static void addSpool(SEXP container, SEXP data) {
+            addSEXP(container, data, 6);
         }
 
-        SEXP getSPool() {
+        static SEXP getSpool(SEXP container) {
             return VECTOR_ELT(container, 6);
         }
 
-        // ENTRY 7: childrenData
-        void addFChildren(SEXP data) {
-            SET_VECTOR_ELT(container, 7, data);
-        }
-
-        SEXP getFChildren() {
-            return VECTOR_ELT(container, 7);
-        }
-
-        // ENTRY 8: reqMap
-        void addReqMapForCompilation(SEXP data) {
-            SET_VECTOR_ELT(container, 8, data);
-        }
-
-        void removeEleFromReqMap(SEXP ele) {
-            auto rData = getReqMapAsVector();
-            int containsElement = -1;
-            std::string dep(CHAR(PRINTNAME(ele)));
-            for (int i = 0; i < Rf_length(rData); i++) {
-                SEXP e = VECTOR_ELT(rData, i);
-                std::string curr(CHAR(PRINTNAME(e)));
-                if (curr.find(dep) != std::string::npos) {
-                    containsElement = i;
-                }
-            }
-
-            if (containsElement != -1) {
-                SEXP newVec;
-                PROTECT(newVec = Rf_allocVector(VECSXP, Rf_length(rData) - 1));
-
-                int newVecIdx = 0;
-                for (int i = 0; i < Rf_length(rData); i++) {
-                    SEXP e = VECTOR_ELT(rData, i);
-                    if (i != containsElement) {
-                        SET_VECTOR_ELT(newVec, newVecIdx++, e);
-                    }
-                }
-
-                SET_VECTOR_ELT(container, 8, newVec);
-                UNPROTECT(1);
-
-            }
-        }
-
-        SEXP getReqMapAsVector() {
-            SEXP rMap = VECTOR_ELT(container, 8);
-            return rMap;
-        }
-
-
-        void print() {
-            print(0);
-        }
-
-        void print(int space) {
+        static void print(SEXP container, int space) {
             printSpace(space);
-            std::cout << "context: " << Context(getContext()) << std::endl;
+            std::cout << "== serializedPool ==" << std::endl;
             space += 2;
+
             printSpace(space);
-            std::cout << "ENTRY(0)[context]: " << getContext() << std::endl;
+            FunctionSignature fs = getFS(container);
+            std::cout << "ENTRY(0)[Function Signature]: " << (int)fs.envCreation << ", " << (int)fs.optimization << ", " <<  fs.numArguments << ", " << fs.hasDotsFormals << ", " << fs.hasDefaultArgs << ", " << fs.dotsPosition << std::endl;
             printSpace(space);
-            FunctionSignature fs = getFunctionSignature();
-            std::cout << "ENTRY(1)[Function Signature]: " << (int)fs.envCreation << ", " << (int)fs.optimization << ", " <<  fs.numArguments << ", " << fs.hasDotsFormals << ", " << fs.hasDefaultArgs << ", " << fs.dotsPosition << std::endl;
-            printSpace(space);
-            std::cout << "ENTRY(2)[Function names]: [ ";
-            auto fNames = getFNames();
+            std::cout << "ENTRY(1)[Function names]: [ ";
+            auto fNames = getFNames(container);
             for (int i = 0; i < Rf_length(fNames); i++) {
                 auto c = VECTOR_ELT(fNames, i);
                 std::cout << CHAR(STRING_ELT(c, 0)) << " ";
@@ -276,8 +135,8 @@ class contextData : containerDataAbstraction {
             std::cout << "]" << std::endl;
 
             printSpace(space);
-            std::cout << "ENTRY(3)[Function Src]: [ ";
-            auto fSrc = getFSrc();
+            std::cout << "ENTRY(2)[Function Src]: [ ";
+            auto fSrc = getFSrc(container);
             for (int i = 0; i < Rf_length(fSrc); i++) {
                 auto c = VECTOR_ELT(fSrc, i);
                 if (c != R_NilValue) {
@@ -289,8 +148,8 @@ class contextData : containerDataAbstraction {
             std::cout << "]" << std::endl;
 
             printSpace(space);
-            std::cout << "ENTRY(4)[Function Arglist Order]: [ ";
-            auto fArg = getFArg();
+            std::cout << "ENTRY(3)[Function Arglist Order]: [ ";
+            auto fArg = getFArg(container);
             for (int i = 0; i < Rf_length(fArg); i++) {
                 auto c = VECTOR_ELT(fArg, i);
                 std::cout << TYPEOF(c) << " ";
@@ -298,30 +157,12 @@ class contextData : containerDataAbstraction {
             std::cout << "]" << std::endl;
 
             printSpace(space);
-            auto cPool = getCPool();
-            std::cout << "ENTRY(5)[CPool]: (" << Rf_length(cPool) << ") [ ";
-            for (int i = 0; i < Rf_length(cPool); i++) {
-                auto c = VECTOR_ELT(cPool, i);
-                std::cout << TYPEOF(c) << " ";
-            }
-            std::cout << "]" << std::endl;
-
-            printSpace(space);
-            auto sPool = getSPool();
-            std::cout << "ENTRY(6)[SPool]: (" << Rf_length(sPool) << ") [ ";
-            for (int i = 0; i < Rf_length(sPool); i++) {
-                auto c = VECTOR_ELT(sPool, i);
-                std::cout << TYPEOF(c) << " ";
-            }
-            std::cout << "]" << std::endl;
-
-            printSpace(space);
             #if PRINT_EXTENDED_CHILDREN == 1
-            std::cout << "ENTRY(7)[children Data]" << std::endl;
+            std::cout << "ENTRY(4)[children Data]" << std::endl;
             #else
-            std::cout << "ENTRY(7)[children Data]: ";
+            std::cout << "ENTRY(4)[children Data]: ";
             #endif
-            auto fChildren = getFChildren();
+            auto fChildren = getFChildren(container);
             for (int i = 0; i < Rf_length(fChildren); i++) {
                 auto cVector = VECTOR_ELT(fChildren, i);
 
@@ -350,130 +191,278 @@ class contextData : containerDataAbstraction {
             std::cout<< std::endl;
             #endif
 
-            auto rData = getReqMapAsVector();
             printSpace(space);
-            std::cout << "ENTRY(8)[reqMapForCompilation]: <";
-            for (int i = 0; i < Rf_length(rData); i++) {
-                SEXP ele = VECTOR_ELT(rData, i);
-                std::cout << CHAR(PRINTNAME(ele)) << " ";
+            std::cout << "ENTRY(5)[Constant Pool Entries]: [ ";
+            auto cpool = getCpool(container);
+            for (int i = 0; i < Rf_length(cpool); i++) {
+                auto c = VECTOR_ELT(cpool, i);
+                std::cout << TYPEOF(c) << " ";
             }
-            std::cout << ">" << std::endl;
+            std::cout << "]" << std::endl;
+
+            printSpace(space);
+            std::cout << "ENTRY(6)[Source Pool Entries]: [ ";
+            auto spool = getSpool(container);
+            for (int i = 0; i < Rf_length(spool); i++) {
+                auto c = VECTOR_ELT(spool, i);
+                std::cout << TYPEOF(c) << " ";
+            }
+            std::cout << "]" << std::endl;
         }
-};
+    };
 
-class serializerData : containerDataAbstraction {
-    // 0 -> hast
-    // 1 -> name
-    // 2 -> envData { context: contextData }
+    class contextData {
+        // 0 (unsigned long) unsigned long
+        // 1 (SEXP) reqMapForCompilation
 
-    public:
-        SEXP getContainer() {
-            return container;
-        }
+        public:
+            // Misc functions
+            static unsigned getStorageSize() {
+                return 2;
+            }
 
-        explicit serializerData(SEXP c) {
-            container = c;
-        }
+            static void addSEXP(SEXP container, SEXP data, const int & index) {
+                SET_VECTOR_ELT(container, index, data);
+            }
 
-        serializerData(SEXP c, SEXP hastSym, const std::string & name) {
-            container = c;
-            SET_VECTOR_ELT(container, 0, hastSym);
-            addString(name, 1);
-            SEXP envObj;
-            PROTECT(envObj = R_NewEnv(R_EmptyEnv,0,0));
-            SET_VECTOR_ELT(container, 2, envObj);
-            UNPROTECT(1);
-        }
+            static SEXP getSEXP(SEXP container, const int & index) {
+                return VECTOR_ELT(container, index);
+            }
 
-        void updateContainer(SEXP c) {
-            container = c;
-        }
+            static void printSpace(int size) {
+                assert(size >= 0);
+                for (int i = 0; i < size; i++) {
+                    std::cout << " ";
+                }
+            }
 
-        void addContextData(SEXP cData, int offsetIndex, std::string context) {
-            SEXP symSxp = Rf_install(context.c_str());
-            SEXP mainMap = VECTOR_ELT(container, 2);
-            SEXP offsetSym = Rf_install(std::to_string(offsetIndex).c_str());
-            if (Rf_findVarInFrame(mainMap, offsetSym) == R_UnboundValue) {
-                SEXP envObj;
-                PROTECT(envObj = R_NewEnv(R_EmptyEnv,0,0));
-                Rf_defineVar(offsetSym, envObj, mainMap);
+            // ENTRY 0: Con
+            static void addContext(SEXP container, const unsigned long & data) {
+                SEXP store;
+                PROTECT(store = Rf_allocVector(RAWSXP, sizeof(unsigned long)));
+                unsigned long * tmp = (unsigned long *) DATAPTR(store);
+                *tmp = data;
+                SET_VECTOR_ELT(container, 0, store);
                 UNPROTECT(1);
             }
-            SEXP offsetMap = Rf_findVarInFrame(mainMap, offsetSym);
 
-            if (offsetIndex == 0) {
-                // Get rid of self dependencies, may happen in case of recursive functions
-                std::stringstream ss;
-                ss << CHAR(PRINTNAME(getHastData())) << "_" << context;
-                contextData conDataHandler(cData);
-                conDataHandler.removeEleFromReqMap(Rf_install(ss.str().c_str()));
+            static unsigned long getContext(SEXP container) {
+                SEXP dataContainer = VECTOR_ELT(container, 0);
+                unsigned long* res = (unsigned long *) DATAPTR(dataContainer);
+                return *res;
             }
 
 
-            Rf_defineVar(symSxp, cData, offsetMap);
-        }
-
-        std::string getNameData() {
-            return getString(1);
-        }
-
-        SEXP getHastData() {
-            return VECTOR_ELT(container, 0);
-        }
-
-        SEXP getContextMap() {
-            return VECTOR_ELT(container, 2);
-        }
-
-        static void iterateOverOffsets(SEXP mainMap, const std::function< void(SEXP, SEXP) >& callback) {
-
-            SEXP offsetBindings = R_lsInternal(mainMap, (Rboolean) false);
-            for (int i = 0; i < Rf_length(offsetBindings); i++) {
-                SEXP offsetKeySym = Rf_install(CHAR(STRING_ELT(offsetBindings, i)));
-                SEXP offsetMap = Rf_findVarInFrame(mainMap, offsetKeySym);
-                callback(offsetKeySym, offsetMap);
+            // ENTRY 1: reqMap
+            static void addReqMapForCompilation(SEXP container, SEXP data) {
+                addSEXP(container, data, 1);
             }
-        }
 
-        static void iterateOverContexts(SEXP offsetMap, const std::function< void(SEXP, SEXP) >& callback) {
-            SEXP maskSym = Rf_install("mask");
-            SEXP contextBindings = R_lsInternal(offsetMap, (Rboolean) false);
-            for (int i = 0; i < Rf_length(contextBindings); i++) {
-                SEXP contextKeySym = Rf_install(CHAR(STRING_ELT(contextBindings, i)));
-                if (contextKeySym == maskSym) {
-                    continue;
+            static SEXP getReqMapAsVector(SEXP container) {
+                return getSEXP(container, 1);
+            }
+
+            static void removeEleFromReqMap(SEXP container, SEXP ele) {
+                auto rData = getReqMapAsVector(container);
+                int containsElement = -1;
+                std::string dep(CHAR(PRINTNAME(ele)));
+                for (int i = 0; i < Rf_length(rData); i++) {
+                    SEXP e = VECTOR_ELT(rData, i);
+                    std::string curr(CHAR(PRINTNAME(e)));
+                    if (curr.find(dep) != std::string::npos) {
+                        containsElement = i;
+                    }
                 }
-                SEXP contextData = Rf_findVarInFrame(offsetMap, contextKeySym);
-                callback(contextKeySym, contextData);
+
+                if (containsElement != -1) {
+                    SEXP newVec;
+                    PROTECT(newVec = Rf_allocVector(VECSXP, Rf_length(rData) - 1));
+
+                    int newVecIdx = 0;
+                    for (int i = 0; i < Rf_length(rData); i++) {
+                        SEXP e = VECTOR_ELT(rData, i);
+                        if (i != containsElement) {
+                            SET_VECTOR_ELT(newVec, newVecIdx++, e);
+                        }
+                    }
+
+                    addReqMapForCompilation(container, newVec);
+                    UNPROTECT(1);
+
+                }
             }
-        }
 
-
-        void print() {
-            print(0);
-        }
-
-
-        void print(int space) {
-            printSpace(space);
-            std::cout << "serializerData: " << std::endl;
-            space += 2;
-            printSpace(space);
-            std::cout << "ENTRY(-3): " << CHAR(PRINTNAME(getHastData())) << std::endl;
-            printSpace(space);
-            std::cout << "ENTRY(-2): " << getNameData() << std::endl;
-
-
-            SEXP mainMap = VECTOR_ELT(container, 2);
-            space += 2;
-
-            iterateOverOffsets(mainMap, [&] (SEXP offsetSymbol, SEXP offsetEnv) {
+            static void print(SEXP container, unsigned int space) {
                 printSpace(space);
-                std::cout << "offset: " << CHAR(PRINTNAME(offsetSymbol)) << std::endl;
-                iterateOverContexts(offsetEnv, [&] (SEXP contextSym, SEXP cData) {
-                    contextData c(cData);
-                    c.print(space);
+                std::cout << "== contextData ==" << std::endl;
+                space += 2;
+
+                printSpace(space);
+                std::cout << "ENTRY(0)[Context]: " << Context(getContext(container)) << std::endl;
+                space += 2;
+
+                printSpace(space);
+                auto rData = getReqMapAsVector(container);
+                std::cout << "ENTRY(1)[reqMapForCompilation]: <";
+                for (int i = 0; i < Rf_length(rData); i++) {
+                    SEXP ele = VECTOR_ELT(rData, i);
+                    std::cout << CHAR(PRINTNAME(ele)) << " ";
+                }
+                std::cout << ">" << std::endl;
+                std::cout << "Print Done" << std::endl;
+            }
+    };
+
+    class serializerData {
+        // 0 (SEXP) Hast
+        // 1 (SEXP) Name
+        // 2 (SEXP) offsetMap
+
+        public:
+            // Misc functions
+            static unsigned getStorageSize() {
+                return 3;
+            }
+
+            static void addSEXP(SEXP container, SEXP data, const int & index) {
+                SET_VECTOR_ELT(container, index, data);
+            }
+
+            static SEXP getSEXP(SEXP container, const int & index) {
+                return VECTOR_ELT(container, index);
+            }
+
+            static void printSpace(int size) {
+                assert(size >= 0);
+                for (int i = 0; i < size; i++) {
+                    std::cout << " ";
+                }
+            }
+
+            // ENTRY 0: Hast
+            static void addHast(SEXP container, SEXP data) {
+                addSEXP(container, data, 0);
+            }
+
+            static SEXP getHast(SEXP container) {
+                return getSEXP(container, 0);
+            }
+
+            // ENTRY 1: Name
+            static void addName(SEXP container, SEXP data) {
+                addSEXP(container, data, 1);
+            }
+
+            static SEXP getName(SEXP container) {
+                return getSEXP(container, 1);
+            }
+
+            static SEXP ensureAndGetOffsetMap(SEXP container) {
+                SEXP currOffsetMap = getBitcodeMap(container);
+                if (TYPEOF(currOffsetMap) != ENVSXP) {
+                    SEXP tmp;
+                    PROTECT(tmp = R_NewEnv(R_EmptyEnv,0,0));
+                    addSEXP(container, tmp, 2);
+                    UNPROTECT(1);
+                }
+
+                SEXP res = getBitcodeMap(container);
+                assert(TYPEOF(res) == ENVSXP);
+                return res;
+            }
+
+            static SEXP ensureAndGetOffsetEnv(SEXP container, SEXP offsetSym) {
+                ensureAndGetOffsetMap(container);
+                REnvHandler oMap(getBitcodeMap(container));
+                if (oMap.get(offsetSym) != nullptr && TYPEOF(oMap.get(offsetSym)) == ENVSXP) {
+                    return oMap.get(offsetSym);
+                } else {
+                    SEXP tmp;
+                    PROTECT(tmp = R_NewEnv(R_EmptyEnv,0,0));
+                    oMap.set(offsetSym, tmp);
+                    UNPROTECT(1);
+                }
+                SEXP res = oMap.get(offsetSym);
+                assert(TYPEOF(res) == ENVSXP);
+                return res;
+            }
+
+            // ENTRY 2: Add Context Data
+            static void addBitcodeData(SEXP container, SEXP offsetSym, SEXP context, SEXP cData) {
+                SEXP offsetEnvContainer = ensureAndGetOffsetEnv(container, offsetSym);
+
+                REnvHandler currMap(offsetEnvContainer);
+                if (std::stoi(CHAR(PRINTNAME(offsetSym))) == 0) {
+                    // Get rid of self dependencies, may happen in case of recursive functions
+                    std::stringstream ss;
+                    ss << CHAR(PRINTNAME(getHast(container))) << "_" << CHAR(PRINTNAME(context));
+                    contextData::removeEleFromReqMap(cData, Rf_install(ss.str().c_str()));
+                }
+                currMap.set(context, cData);
+            }
+
+            // static void addBitcodeData(SEXP container, int offset, std::string context, SEXP cData) {
+            //     addBitcodeData(container, Rf_install(std::to_string(offset).c_str()), Rf_install(context.c_str()), cData);
+            // }
+
+            static SEXP getBitcodeMap(SEXP container) {
+                return getSEXP(container, 2);
+            }
+
+            static void copy(SEXP from, SEXP to) {
+                addHast(to, getHast(from));
+                addName(to, getName(from));
+
+                iterate(from, [&](SEXP offsetSym, SEXP conSym, SEXP cData, bool isMask) {
+                    addBitcodeData(to, offsetSym, conSym, cData);
                 });
-            });
-        }
-};
+            }
+
+            static void iterate(SEXP container, const std::function< void(SEXP, SEXP, SEXP, bool) >& callback) {
+                static SEXP maskSym = Rf_install("mask");
+
+                SEXP offsetMapContainer = ensureAndGetOffsetMap(container);
+
+                REnvHandler offsetMap(offsetMapContainer);
+                offsetMap.iterate([&](SEXP offsetSym, SEXP conDataContainer) {
+                    if (TYPEOF(conDataContainer) != ENVSXP) {
+                        Rf_error("Serializer data error, offset symbol bound to non ENVSXP!");
+                        return;
+                    }
+                    REnvHandler conMap(conDataContainer);
+                    conMap.iterate([&](SEXP conSym, SEXP conData){
+                        if (conSym == maskSym) {
+                            callback(offsetSym, conSym, conData, true);
+                        } else {
+                            callback(offsetSym, conSym, conData, false);
+                        }
+                    });
+                });
+            }
+
+            static void print(SEXP container, int space) {
+                printSpace(space);
+                std::cout << "== serializerData ==" << std::endl;
+                space += 2;
+
+                printSpace(space);
+                std::cout << "ENTRY(0)[Hast]: " << CHAR(PRINTNAME(getHast(container))) << std::endl;
+
+                printSpace(space);
+                std::cout << "ENTRY(1)[Function Name]: " << CHAR(PRINTNAME(getName(container))) << std::endl;
+
+                space += 2;
+
+                iterate(container, [&](SEXP offsetSym, SEXP conSym, SEXP cData, bool isMask) {
+                    if (!isMask) {
+                        printSpace(space);
+                        std::cout << "At Offset: " << CHAR(PRINTNAME(offsetSym)) << ", Context: " << CHAR(PRINTNAME(conSym)) << std::endl;
+                        contextData::print(cData, space+2);
+                    } else {
+                        printSpace(space);
+                        std::cout << "Mask At Offset: " << CHAR(PRINTNAME(offsetSym)) << std::endl;
+                    }
+                });
+
+            }
+    };

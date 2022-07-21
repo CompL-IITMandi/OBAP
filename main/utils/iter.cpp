@@ -113,9 +113,8 @@ void doAnalysisOverContexts(const std::string & pathPrefix, SEXP contextMap, Ana
   REnvHandler contextMapHandler(contextMap);
   contextMapHandler.iterate([&] (SEXP contextSym, SEXP cData) {
     if (contextSym == maskSym) return;
-    contextData cDataHandler(cData);
 
-    unsigned long con = cDataHandler.getContext();
+    unsigned long con = contextData::getContext(cData);
     Context c(con);
 
     #if DEBUG_ANALYSIS == 1
@@ -124,12 +123,38 @@ void doAnalysisOverContexts(const std::string & pathPrefix, SEXP contextMap, Ana
 
     contextsVec.push_back(c);          
       
-    std::stringstream bitcodePath;
+    std::stringstream bitcodePath, poolPath;
     bitcodePath << pathPrefix << CHAR(PRINTNAME(contextSym)) << ".bc";
+    poolPath << pathPrefix << CHAR(PRINTNAME(contextSym)) << ".pool";
 
     #if DEBUG_ANALYSIS == 1
     std::cout << "    Analyzing: " << bitcodePath.str() << std::endl;
     #endif
+
+    FILE *reader;
+    reader = fopen(poolPath.str().c_str(),"r");
+
+    if (!reader) {
+      for (int i = 0; i < 10; i++) {
+        sleep(1);
+        // std::cout << "waiting to open: " << metadataPath.str() << std::endl;
+        reader = fopen(poolPath.str().c_str(),"r");
+        if (reader) break;
+      }
+
+      if (!reader) {
+        std::cout << "unable to open " << poolPath.str() << std::endl;
+        Rf_error("unable to open file!");
+        return;
+      }
+    }
+
+    // Initialize the deserializing stream
+    R_inpstream_st inputStream;
+    R_InitFileInPStream(&inputStream, reader, R_pstream_binary_format, NULL, R_NilValue);
+
+    SEXP poolDataContainer;
+    PROTECT(poolDataContainer = R_Unserialize(&inputStream));
 
     // load bitcode
     llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> mb = llvm::MemoryBuffer::getFile(bitcodePath.str().c_str());
@@ -160,7 +185,7 @@ void doAnalysisOverContexts(const std::string & pathPrefix, SEXP contextMap, Ana
 
     weightAnalysis[c] = weight;
 
-    std::string mainFunName(CHAR(STRING_ELT(VECTOR_ELT(cDataHandler.getFNames(), 0), 0)));
+    std::string mainFunName(CHAR(STRING_ELT(VECTOR_ELT(SerializedPool::getFNames(poolDataContainer), 0), 0)));
 
     // std::cout << c.toI() << " --> " << mainFunName << std::endl;
 
@@ -223,6 +248,8 @@ void doAnalysisOverContexts(const std::string & pathPrefix, SEXP contextMap, Ana
 
     #endif
 
+    UNPROTECT(1);
+
 
   });
   call(contextsVec, weightAnalysis, simpleArgumentAnalysis, funCallBFData);
@@ -231,6 +258,8 @@ void doAnalysisOverContexts(const std::string & pathPrefix, SEXP contextMap, Ana
 
 
 void compareContexts(std::vector<Context> & contextsVec, ComparisonCallback call) {
+  bool noStrictComparison = getenv("DISABLE_STRICT_COMPARISON") ? true : false;
+  bool noRoughComparison = getenv("DISABLE_ROUGH_COMPARISON") ? true : false;
   for (auto it_currCon = contextsVec.begin(); it_currCon != contextsVec.end(); ++it_currCon) {
     auto it_other = it_currCon + 1;
     while (it_other != contextsVec.end()) {
@@ -238,20 +267,20 @@ void compareContexts(std::vector<Context> & contextsVec, ComparisonCallback call
       auto other = *it_other;
       
       // Strictly comparable
-      if (other.smaller(currCon)) {
+      if (noStrictComparison == false && other.smaller(currCon)) {
         call(currCon, other, ComparisonType::STRICT);
-      } else if (currCon.smaller(other)) {
+      } else if (noStrictComparison == false && currCon.smaller(other)) {
         call(other, currCon, ComparisonType::STRICT);
       }
       // Roughly comparable - EQ
-      else if (other.roughlySmaller(currCon) && currCon.roughlySmaller(other)) {
+      else if (noRoughComparison == false && other.roughlySmaller(currCon) && currCon.roughlySmaller(other)) {
         call(currCon, other, ComparisonType::ROUGH_EQ);
       }
 
       // Roughlt comparable - NEQ
-      else if (other.roughlySmaller(currCon)) {
+      else if (noRoughComparison == false && other.roughlySmaller(currCon)) {
         call(currCon, other, ComparisonType::ROUGH_NEQ);
-      } else if (currCon.roughlySmaller(other)) {
+      } else if (noRoughComparison == false && currCon.roughlySmaller(other)) {
         call(other, currCon, ComparisonType::ROUGH_NEQ);
       }      
       it_other++;

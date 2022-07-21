@@ -2,3 +2,4 @@ tests/
 build/
 .vscode/
 out
+run.sh

@@ -3,50 +3,6 @@
 
 #define DEBUG_COMPARISONS 0
 
-// Higher STRICTNESS means stricter bounds here
-//  STRICTNESS 1
-//    STRICT
-//      weightSimilarity || funCallSimilarity || argumentEffectSimilarity -> curb entire context diff
-//    ROUGH
-//      weightSimilarity || funCallSimilarity -> curb entire context diff
-//    DIFFZEROMISS
-//      weightSimilarity || argumentEffectSimilarity || funCallSimilarity -> curb entire context diff
-//    DIFFSAMEMISS
-//      weightSimilarity || argumentEffectSimilarity || funCallSimilarity -> curb entire context diff
-//    DIFFDIFFMISS
-//      weightSimilarity || funCallSimilarity -> curb entire context diff
-
-//  STRICTNESS 2
-//    STRICT
-//      weightSimilarity && funCallSimilarity -> curb entire context diff
-//      || argumentEffectSimilarity -> curb arg diff
-//    ROUGH
-//      weightSimilarity && funCallSimilarity -> curb entire context diff
-//    DIFFZEROMISS
-//      weightSimilarity && funCallSimilarity -> curb entire context diff
-//      || argumentEffectSimilarity -> curb arg diff
-//    DIFFSAMEMISS
-//      weightSimilarity && funCallSimilarity -> curb entire context diff
-//      || argumentEffectSimilarity -> curb arg diff
-//    DIFFDIFFMISS
-//      weightSimilarity && funCallSimilarity -> curb entire context diff
-
-//  STRICTNESS 3
-//    STRICT
-//      weightSimilarity && argumentEffectSimilarity && funCallSimilarity -> curb entire context diff
-//      || argumentEffectSimilarity -> curb arg diff
-//    ROUGH
-//      weightSimilarity && funCallSimilarity -> curb entire context diff
-//    DIFFZEROMISS
-//      weightSimilarity && argumentEffectSimilarity && funCallSimilarity -> curb entire context diff
-//      || argumentEffectSimilarity -> curb arg diff
-//    DIFFSAMEMISS
-//      weightSimilarity && argumentEffectSimilarity && funCallSimilarity -> curb entire context diff
-//      || argumentEffectSimilarity -> curb arg diff
-//    DIFFDIFFMISS
-//      weightSimilarity && funCallSimilarity -> curb entire context diff
-
-
 static bool checkWeightSimilarity(Context & c1, Context & c2, std::unordered_map<Context, unsigned> & weightAnalysis) {
   auto diff = weightAnalysis[c1] - weightAnalysis[c2];
   if (diff < 0) diff = -diff;
@@ -70,11 +26,14 @@ static bool checkFunCallSimilarity(Context & c1, Context & c2, std::unordered_ma
   for (unsigned i = 0; i < levelsInCurrent; i++) {
     auto v1 = currV[i];
     auto v2 = otherV[i];
-    std::vector<std::string> diff;
+    std::vector<std::string> diff1, diff2;
     //no need to sort since it's already sorted
     std::set_difference(v1.begin(), v1.end(), v2.begin(), v2.end(),
-      std::inserter(diff, diff.begin()));
-    if (diff.size() > 0) {
+      std::inserter(diff1, diff1.begin()));
+    std::set_difference(v2.begin(), v2.end(), v1.begin(), v1.end(),
+      std::inserter(diff2, diff2.begin()));
+
+    if (diff1.size() > 0 || diff2.size() > 0) {
       callOrderDifference++;
     }
   }
@@ -354,32 +313,46 @@ Context ContextAnalysisComparison::getMask(
   static bool ANALYSIS_FUNCALL_BF = getenv("ANALYSIS_FUNCALL_BF") ? 1 : 0;
   static bool ANALYSIS_ARGEFFECT = getenv("ANALYSIS_ARGEFFECT") ? 1 : 0;
 
+  static bool ANDALL = getenv("ANDALL") ? 1 : 0;
+
   // if (type == ComparisonType::STRICT) {
   //   std::cout << "STRICT COMPARISON" << std::endl;
   // } else {
   //   std::cout << "ROUGH COMPARISON" << std::endl;
   // }
-  
-  if (ANALYSIS_WT == 1) {
+
+  if (ANDALL) {
     bool weightSimilarity = checkWeightSimilarity(c1, c2, weightAnalysis);
-    if (weightSimilarity) {
+    bool funCallSimilarity = checkFunCallSimilarity(c1, c2, funCallBFData);
+    auto argEffectSimilarity = checkArgEffectSimilarity(c1, c2, getDiff(), simpleArgumentAnalysis);
+    if (weightSimilarity && funCallSimilarity && argEffectSimilarity.first) {
       mask = getDiff();
     }
-  }
 
-  if (ANALYSIS_FUNCALL_BF == 1) {
-    bool funCallSimilarity = checkFunCallSimilarity(c1, c2, funCallBFData);
-    if (funCallSimilarity) {
-      mask = mask + getDiff();
+  } else {
+
+    if (ANALYSIS_WT == 1) {
+      bool weightSimilarity = checkWeightSimilarity(c1, c2, weightAnalysis);
+      if (weightSimilarity) {
+        mask = getDiff();
+      }
+    }
+
+    if (ANALYSIS_FUNCALL_BF == 1) {
+      bool funCallSimilarity = checkFunCallSimilarity(c1, c2, funCallBFData);
+      if (funCallSimilarity) {
+        mask = mask + getDiff();
+      }
+    }
+
+    if (ANALYSIS_ARGEFFECT == 1) {
+      auto argEffectSimilarity = checkArgEffectSimilarity(c1, c2, getDiff(), simpleArgumentAnalysis);
+      if (argEffectSimilarity.first) {
+        mask = mask + argEffectSimilarity.second;
+      }
     }
   }
-
-  if (ANALYSIS_ARGEFFECT == 1) {
-    auto argEffectSimilarity = checkArgEffectSimilarity(c1, c2, getDiff(), simpleArgumentAnalysis);
-    if (argEffectSimilarity.first) {
-      mask = mask + argEffectSimilarity.second;
-    }
-  }
+  
 
   return mask;
 }

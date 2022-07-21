@@ -83,8 +83,7 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
         fclose(reader);
 
         // Get serialized metadata
-        serializerData sData(serDataContainer);
-        REnvHandler offsetMapHandler(sData.getContextMap());
+        REnvHandler offsetMapHandler(serializerData::getBitcodeMap(serDataContainer));
 
         offsetMapHandler.iterate([&] (SEXP offsetIndex, SEXP contextMap) {
           Context mask;
@@ -94,14 +93,14 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
             mask = oldMask = Context(*((unsigned long *) DATAPTR(existingMaskContainer)));
           }
 
-          maskDataStream << CHAR(PRINTNAME(sData.getHastData())) << "_" << CHAR(PRINTNAME(offsetIndex)) << " ";
+          maskDataStream << CHAR(PRINTNAME(serializerData::getHast(serDataContainer))) << "_" << CHAR(PRINTNAME(offsetIndex)) << " ";
 
 
           // We are now processing a function, non zero index indicates an inner function
           std::set<unsigned long> toRemove;
 
           std::stringstream pathPrefix;
-          pathPrefix << folderPath << "/" << CHAR(PRINTNAME(sData.getHastData())) << "_" << CHAR(PRINTNAME(offsetIndex)) << "_";
+          pathPrefix << folderPath << "/" << CHAR(PRINTNAME(serializerData::getHast(serDataContainer))) << "_" << CHAR(PRINTNAME(offsetIndex)) << "_";
 
           
 
@@ -169,11 +168,11 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
 
           // std::cout << "    [DEPRECATED CONTEXTS]: [";
 
-          // for (auto & ele : toRemove) {
-          //   std::cout << ele;
-          //   maskDataStream << ele << " ";
+          for (auto & ele : toRemove) {
+            // std::cout << ele;
+            maskDataStream << ele << " ";
             
-          // }
+          }
           // std::cout << "]" << std::endl;
 
           maskDataStream << std::endl;
