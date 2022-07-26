@@ -7,257 +7,499 @@
 #include <algorithm>
 #include "utils/serializerData.h"
 
-#define DEBUG_ANALYSIS 0
+#define DEBUG_ANALYSIS 1
+#define DEBUG_SLOT_SELECTION 0
+#define DEBUG_SLOT_SELECTION_READABLE 1
 
-void iterateOverBitcodes(json & processedJson, IterCallback call) {
-  for (json::iterator it_meta = processedJson.begin(); it_meta != processedJson.end(); ++it_meta) {
-    auto meta = it_meta.key();
-    auto currVal = it_meta.value();
-    auto hast = currVal["hast"];
-    auto name = currVal["name"];
-    auto offsetMap = currVal["offsetMap"];
+#define MAX_SLOTS 5
 
-    for (json::iterator it_offset = offsetMap.begin(); it_offset != offsetMap.end(); ++it_offset) {
-      auto offset = it_offset.key();
-      auto contextMap = it_offset.value();
-      call(
-        meta,
-        hast,
-        name,
-        offset,
-        contextMap
-      );
-    }
+typedef std::vector<rir::ObservedValues> TFVector;
+
+inline TFVector getFeedbackAsVector(SEXP cData) {
+  TFVector res;
+
+  SEXP tfContainer = rir::contextData::getTF(cData);
+  rir::ObservedValues * tmp = (rir::ObservedValues *) DATAPTR(tfContainer);
+  for (int i = 0; i < Rf_length(tfContainer) / (int) sizeof(rir::ObservedValues); i++) {
+      res.push_back(tmp[i]);      
   }
+
+  return res;
 }
 
-// void doAnalysisOverContexts(const std::string & pathPrefix, json & contextMap, AnalysisCallback call) {
-//   std::vector<Context> contextsVec;
-//   std::unordered_map<Context, unsigned> weightAnalysis;
-//   std::unordered_map<Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > simpleArgumentAnalysis;
-//   std::unordered_map<Context, std::vector<std::set<std::string>>> funCallBFData;
 
-//   for (json::iterator currContext = contextMap.begin(); currContext != contextMap.end(); ++currContext) {
-//     std::string conStr = currContext.value()["context"];
-//     unsigned long con = std::stoul(conStr);
-//     Context c(con);
+// https://stackoverflow.com/questions/5095407/all-combinations-of-k-elements-out-of-n
+template <typename Iterator>
+inline bool next_combination(const Iterator first, Iterator k, const Iterator last) {
+   /* Credits: Thomas Draper */
+   if ((first == last) || (first == k) || (last == k))
+      return false;
+   Iterator itr1 = first;
+   Iterator itr2 = last;
+   ++itr1;
+   if (last == itr1)
+      return false;
+   itr1 = last;
+   --itr1;
+   itr1 = k;
+   --itr2;
+   while (first != itr1)
+   {
+      if (*--itr1 < *itr2)
+      {
+         Iterator j = k;
+         while (!(*itr1 < *j)) ++j;
+         std::iter_swap(itr1,j);
+         ++itr1;
+         ++j;
+         itr2 = k;
+         std::rotate(itr1,j,last);
+         while (last != j)
+         {
+            ++j;
+            ++itr2;
+         }
+         std::rotate(k,itr2,last);
+         return true;
+      }
+   }
+   std::rotate(first,k,last);
+   return false;
+}
 
-//     contextsVec.push_back(c);          
+
+class TVGraph {
+
+  class TVNode {
+    public:
+      TVNode() = delete;
+      TVNode(const unsigned int & idx) : feedbackVectorIdx(idx) {}
+      
+      void addNode(SEXP node) {
+        nodes.push_back(node);
+      }
+
+      int size() {
+        return nodes.size();
+      }
+
+      unsigned int getFeedbackVectorIdx() {
+        return feedbackVectorIdx;
+      }
+
+    private:
+      unsigned int feedbackVectorIdx;
+      std::vector<SEXP> nodes;
+  };
+  
+  public:
+
+    TVGraph(std::vector<SEXP> v) {
+      for (auto & ele : v) {
+        addNode(ele);
+      }
+    }
+
+    void addNode(SEXP cData) {
+      TFVector curr = getFeedbackAsVector(cData);
+      // If curr exists then add to an existing node
+      int i = 0;
+      for (; i < typeVersions.size(); i++) {
+        if (TFVEquals(typeVersions[i], curr)) {
+          nodes[i].addNode(cData);
+          return;
+        }
+      }
+
+      // If this is a new version, add new
+      typeVersions.push_back(curr);
+      TVNode n(typeVersions.size() - 1);
+      n.addNode(cData);
+      nodes.push_back(n);
+    }
+
+    // Returns true if the given indexes uniquely differentiate between type versions
+    bool checkValidity(std::vector<int> & indices) {
+      std::vector<std::vector<uint32_t>> res;
+
+      #if DEBUG_SLOT_SELECTION == 1
+      std::cout << "=== COMPARISONS ===" << std::endl;
+      #endif
+
+      for (auto & tv : typeVersions) {
+        std::vector<uint32_t> ele;
+
+        #if DEBUG_SLOT_SELECTION == 1
+        std::cout << "( ";
+        #endif
+
+        for (auto & idx : indices) {
+          uint32_t curr = *((uint32_t *) &(tv[idx]));
+          ele.push_back(curr);
+
+          #if DEBUG_SLOT_SELECTION == 1
+          tv[idx].print(std::cout);
+          std::cout << " ; ";
+          #endif
+        }
+
+        #if DEBUG_SLOT_SELECTION == 1
+        std::cout << ")" << std::endl;
+        #endif
+
+        res.push_back(ele);
+      }
+
+      #if DEBUG_SLOT_SELECTION == 1
+      std::cout << "=== === === === ===" << std::endl;
+      #endif
+
+      // Check if duplicate elements exist
+      for (int m = 0; m < res.size(); m++) {
+        auto first = res[m];
+
+        for (int i = 0; i < res.size(); i++) {
+          if (i == m) continue;
+          auto curr = res[i];
+
+          bool match = true;
+
+          for (int j = 0; j < first.size(); j++) {
+            if (first[j] != curr[j]) {
+              match = false;
+            }
+          }
+
+          
+          // If match is true, then return false as we cannot uniquely identify using this indices subset
+          if (match) {
+            #if DEBUG_SLOT_SELECTION == 1
+            std::cout << "Result is same for " << m << " and " << i << std::endl; 
+            #endif
+            return false;
+          }
+        }
+      }
+
+      #if DEBUG_SLOT_SELECTION_READABLE == 1
+
+      std::cout << "          === COMPARISONS ===" << std::endl;
+      for (auto & tv : typeVersions) {
+        std::cout << "          ( ";
+        for (auto & idx : indices) {
+          tv[idx].print(std::cout);
+          std::cout << " ; ";
+        }
+        std::cout << ")" << std::endl;
+      }
+      std::cout << "          Result: [ ";
+      for (auto & idx : indices) {
+        std::cout << idx << " ";
+      }
+      std::cout << "]" << std::endl;
+      std::cout << "          === === === === ===" << std::endl;
+      #endif
+      
+      return true;
+    }
+
+    std::pair<bool, std::vector<int>> findSlotIn(size_t k) {
+      auto ints = getDiffSlots();
+
+      if (ints.size() < k) {
+        return std::pair<bool, std::vector<int>>(false, std::vector<int>());
+      }
+
+      do {
+
+        std::vector<int> indices;
+        #if DEBUG_SLOT_SELECTION == 1
+        std::cout << "Trying (";
+        #endif
+        for (int i = 0; i < k; ++i) {
+          indices.push_back(ints[i]);
+          #if DEBUG_SLOT_SELECTION == 1
+          std::cout << ints[i] << " ";
+          #endif
+        }
+        #if DEBUG_SLOT_SELECTION == 1
+        std::cout << ")\n";
+        #endif
+
+        bool res = checkValidity(indices);
+        if (res) {
+          return std::pair<bool, std::vector<int>>(true, res);
+        }
+      }
+      while(next_combination(ints.begin(),ints.begin() + k,ints.end()));
+
+      return std::pair<bool, std::vector<int>>(false, std::vector<int>());
+    }
+
+    void print() {
+      unsigned int i = 0;
+      std::cout << "    Found " << typeVersions.size() << " Type Versions" << std::endl;
+      for (auto & ele : typeVersions) {
+        std::cout << "      Type version " << i << " (" << nodes[i].size() << " redundant nodes) " << ": {";
+        i++;
+
+        int k = 0;
+        for (auto & e : ele) {
+          std::cout << " (" << k++ << ")[";
+          e.print(std::cout);
+          std::cout << "]";
+        }
+        std::cout << "}" << std::endl;
+      }
+      if (typeVersions.size() > 1) {
+        auto diffSlots = getDiffSlots();
+        std::cout << "      Slots in focus(" << diffSlots.size() << "): [ ";
+        for (auto & ele : diffSlots) {
+          std::cout << ele << " ";
+        }
+        std::cout << "]" << std::endl;
+        for (int i = 1; i <= MAX_SLOTS; i++) {
+          auto result = findSlotIn(i);
+          if (result.first) {
+            std::cout << "    Found result in " << i << " slots" << std::endl;
+            return;
+          }
+        }
+      }
+    }
+
+  private:
+
+    std::vector<unsigned int> getDiffSlots() {
+      std::set<unsigned int> res;
+      auto numVersions = typeVersions.size();
+      auto numSlots = typeVersions[0].size();
+      for (int i = 0; i < numSlots; i++) {
+        uint32_t diffSlot1Val = *((uint32_t *) &typeVersions[0][i]);
+        for (int j = 1; j < numVersions; j++) {
+          uint32_t curr = *((uint32_t *) &typeVersions[j][i]);
+          if (curr != diffSlot1Val) {
+            res.insert(i);
+          }
+        }
+      }
+
+      return std::vector<unsigned int>(res.begin(), res.end());
+    }
     
-//     std::stringstream bitcodePath;
-//     bitcodePath << pathPrefix << conStr << ".bc";
 
-//     // load bitcode
-//     llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> mb = llvm::MemoryBuffer::getFile(bitcodePath.str().c_str());
+    bool TFVEquals(TFVector & v1, TFVector & v2) {
+      assert(v1.size() == v2.size());
 
-//     llvm::orc::ThreadSafeContext TSC = std::make_unique<llvm::LLVMContext>();
+      for (int i = 0; i < v1.size(); i++) {
+        rir::ObservedValues ov1, ov2;
+        ov1 = v1[i];
+        ov2 = v2[i];
+        uint32_t * t1, * t2;
+        t1 = (uint32_t*) &ov1;
+        t2 = (uint32_t*) &ov2;
+        if (*t1 != *t2) {
+          // std::cout << "Different: [";
+          // ov1.print(std::cout);
+          // std::cout << "] [";
+          // ov2.print(std::cout);
+          // std::cout << "]" << std::endl;
+          return false;
+        }
+      }
+      return true;
+    }
 
-//     // Load the memory buffer into a LLVM module
-//     llvm::Expected<std::unique_ptr<llvm::Module>> llModuleHolder = llvm::parseBitcodeFile(mb->get()->getMemBufferRef(), *TSC.getContext());
+    std::vector<TFVector> typeVersions;
+    std::vector<TVNode> nodes;
+};
 
-//     // ModuleManager to run our passes on the bitcodes
-//     ModuleManager MM(*llModuleHolder.get().get());
-
-//     MM.runPasses();
-
-//     auto callSiteCounterRes = MM.getRshCallSiteCounterRes();
-
-//     unsigned weight = 0;
-
-//     for (auto & ele : callSiteCounterRes) {
-//       weight += RshBuiltinWeights::getWeight(ele.first().str());
-//     }
-//     weightAnalysis[c] = weight;
-
-//     std::string mainFunName = currContext.value()["function_names"][0];
-
-//     auto argTrackRes = MM.getRshArgumentEffectSimpleRes();
-//     for (auto & ele : argTrackRes) {
-//       auto currFun = ele.first;
-//       auto currFunData = ele.second;
-//       if (currFun->getName().str() == mainFunName) {
-//         simpleArgumentAnalysis[c] = currFunData;
-//         break;
-//       }
-//     }
-
-//     auto funcCallBFRes = MM.getFunctionCallBreathFirstRes();
-//     for (auto & ele : funcCallBFRes) {
-//       auto currFunName = ele.first().str();
-//       auto currFunData = ele.second;
-//       if (currFunName == mainFunName) {
-//         std::vector<std::set<std::string>> fc;
-//         for (auto & e : currFunData) fc.push_back(e.getFunctionSet());
-//         funCallBFData[c] = fc;
-//         break;
-//       }
-//     }
-    
-//   }
-//   call(contextsVec, weightAnalysis, simpleArgumentAnalysis, funCallBFData);
-
-// }
 
 void doAnalysisOverContexts(const std::string & pathPrefix, SEXP contextMap, AnalysisCallback call) {
-  std::vector<Context> contextsVec;
-  std::unordered_map<Context, unsigned> weightAnalysis;
-  std::unordered_map<Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > simpleArgumentAnalysis;
-  std::unordered_map<Context, std::vector<std::set<std::string>>> funCallBFData;
-
-  #if DEBUG_ANALYSIS == 1
-  std::cout << "Starting analysis over: " << pathPrefix << std::endl;
-  #endif
-
   static SEXP maskSym = Rf_install("mask");
+  std::unordered_map<unsigned long, std::vector<SEXP>> contexts;
+
+  std::cout << "Processing: " << pathPrefix << std::endl;
 
   REnvHandler contextMapHandler(contextMap);
-  contextMapHandler.iterate([&] (SEXP contextSym, SEXP cData) {
-    if (contextSym == maskSym) return;
+  contextMapHandler.iterate([&] (SEXP epochSym, SEXP cData) {
+    if (epochSym == maskSym) return;
+    // #if DEBUG_ANALYSIS == 1
+    // std::cout << "EPOCH: " << CHAR(PRINTNAME(epochSym)) << std::endl;
+    // rir::contextData::print(cData, 2);
+    // #endif
 
-    unsigned long con = contextData::getContext(cData);
-    Context c(con);
+    unsigned long con = rir::contextData::getContext(cData);
 
-    #if DEBUG_ANALYSIS == 1
-    std::cout << "  context: (" << con << ")" << c << std::endl;
-    #endif
-
-    contextsVec.push_back(c);          
-      
-    std::stringstream bitcodePath, poolPath;
-    bitcodePath << pathPrefix << CHAR(PRINTNAME(contextSym)) << ".bc";
-    poolPath << pathPrefix << CHAR(PRINTNAME(contextSym)) << ".pool";
-
-    #if DEBUG_ANALYSIS == 1
-    std::cout << "    Analyzing: " << bitcodePath.str() << std::endl;
-    #endif
-
-    FILE *reader;
-    reader = fopen(poolPath.str().c_str(),"r");
-
-    if (!reader) {
-      for (int i = 0; i < 10; i++) {
-        sleep(1);
-        // std::cout << "waiting to open: " << metadataPath.str() << std::endl;
-        reader = fopen(poolPath.str().c_str(),"r");
-        if (reader) break;
-      }
-
-      if (!reader) {
-        std::cout << "unable to open " << poolPath.str() << std::endl;
-        Rf_error("unable to open file!");
-        return;
-      }
-    }
-
-    // Initialize the deserializing stream
-    R_inpstream_st inputStream;
-    R_InitFileInPStream(&inputStream, reader, R_pstream_binary_format, NULL, R_NilValue);
-
-    SEXP poolDataContainer;
-    PROTECT(poolDataContainer = R_Unserialize(&inputStream));
-
-    // load bitcode
-    llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> mb = llvm::MemoryBuffer::getFile(bitcodePath.str().c_str());
-    llvm::orc::ThreadSafeContext TSC = std::make_unique<llvm::LLVMContext>();
-
-    // Load the memory buffer into a LLVM module
-    llvm::Expected<std::unique_ptr<llvm::Module>> llModuleHolder = llvm::parseBitcodeFile(mb->get()->getMemBufferRef(), *TSC.getContext());
-
-    // ModuleManager to run our passes on the bitcodes
-    ModuleManager MM(*llModuleHolder.get().get());
-
-    MM.runPasses();
-
-    auto callSiteCounterRes = MM.getRshCallSiteCounterRes();
-
-    unsigned weight = 0;
-    for (auto & ele : callSiteCounterRes) {
-      weight += ele.second * RshBuiltinWeights::getWeight(ele.first().str());
-    }
-    
-    #if DEBUG_ANALYSIS == 1
-    std::cout << "    == CALL SITE OPCODE SIMILARITY ==" << std::endl;
-    for (auto & ele : callSiteCounterRes) {
-      std::cout << "      " << ele.first().str() << " : " << ele.second << "[" << (ele.second * RshBuiltinWeights::getWeight(ele.first().str())) << "]" << std::endl;
-    }
-    std::cout << "        " << "Total : " << weight << std::endl;
-    #endif
-
-    weightAnalysis[c] = weight;
-
-    std::string mainFunName(CHAR(STRING_ELT(VECTOR_ELT(SerializedPool::getFNames(poolDataContainer), 0), 0)));
-
-    // std::cout << c.toI() << " --> " << mainFunName << std::endl;
-
-
-    auto argTrackRes = MM.getRshArgumentEffectSimpleRes();
-    for (auto & ele : argTrackRes) {
-      auto currFun = ele.first;
-      auto currFunData = ele.second;
-      if (currFun->getName().str() == mainFunName) {
-        simpleArgumentAnalysis[c] = currFunData;
-        break;
-      }
-    }
-
-    #if DEBUG_ANALYSIS == 1
-    std::cout << "    == ARG EFFECT TRACKING ==" << std::endl;
-    for (auto & ele : argTrackRes) {
-      auto currFun = ele.first;
-      auto currFunData = ele.second;
-      std::cout << "      Function: " << currFun->getName().str() << std::endl;
-      for (auto & data : currFunData) {
-        unsigned argIdx = data.first;
-        auto calledFuns = data.second; 
-        std::cout << "        [arg" << argIdx << "]: ";
-        for (auto & funName : calledFuns) {
-          std::cout << funName << " -- ";
-        }
-        std::cout << std::endl;
-      }
-    }
-    #endif
-
-    auto funcCallBFRes = MM.getFunctionCallBreathFirstRes();
-    for (auto & ele : funcCallBFRes) {
-      auto currFunName = ele.first().str();
-      auto currFunData = ele.second;
-      if (currFunName == mainFunName) {
-        std::vector<std::set<std::string>> fc;
-        for (auto & e : currFunData) fc.push_back(e.getFunctionSet());
-        funCallBFData[c] = fc;
-        break;
-      }
-    }
-
-    #if DEBUG_ANALYSIS == 1
-    std::cout << "    == FUN CALL BF ==" << std::endl;
-    for (auto & ele : funcCallBFRes) {
-      auto currFunName = ele.first().str();
-      auto currFunData = ele.second;
-      std::cout << "      " << currFunName;
-      if (currFunName == mainFunName) {
-        std::cout << " [MAIN]";
-      }
-      std::cout << std::endl;
-      unsigned i = 0;
-      for (auto & e : currFunData) {
-        std::cout << "        " << ++i << ": " << e.getNodeCompressedName() << std::endl;
-      }
-    }
-
-    #endif
-
-    UNPROTECT(1);
-
-
+    contexts[con].push_back(cData);
   });
-  call(contextsVec, weightAnalysis, simpleArgumentAnalysis, funCallBFData);
+
+
+  for (auto & ele : contexts) {
+    std::cout << "  Processing context: " << rir::Context(ele.first) << std::endl;
+    TVGraph g(ele.second);
+    
+    g.print();
+
+    // getchar();
+  }
+
+  // std::vector<rir::Context> contextsVec;
+  // std::unordered_map<rir::Context, unsigned> weightAnalysis;
+  // std::unordered_map<rir::Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > simpleArgumentAnalysis;
+  // std::unordered_map<rir::Context, std::vector<std::set<std::string>>> funCallBFData;
+
+  // #if DEBUG_ANALYSIS == 1
+  // std::cout << "Starting analysis over: " << pathPrefix << std::endl;
+  // #endif
+
+
+  // REnvHandler contextMapHandler(contextMap);
+  // contextMapHandler.iterate([&] (SEXP contextSym, SEXP cData) {
+  //   if (contextSym == maskSym) return;
+
+  //   unsigned long con = rir::contextData::getContext(cData);
+  //   rir::Context c(con);
+
+    
+
+  //   contextsVec.push_back(c);          
+      
+  //   std::stringstream bitcodePath, poolPath;
+  //   bitcodePath << pathPrefix << CHAR(PRINTNAME(contextSym)) << ".bc";
+  //   poolPath << pathPrefix << CHAR(PRINTNAME(contextSym)) << ".pool";
+
+  //   #if DEBUG_ANALYSIS == 1
+  //   std::cout << "    Analyzing: " << bitcodePath.str() << std::endl;
+  //   #endif
+
+  //   FILE *reader;
+  //   reader = fopen(poolPath.str().c_str(),"r");
+
+  //   if (!reader) {
+  //     for (int i = 0; i < 10; i++) {
+  //       sleep(1);
+  //       // std::cout << "waiting to open: " << metadataPath.str() << std::endl;
+  //       reader = fopen(poolPath.str().c_str(),"r");
+  //       if (reader) break;
+  //     }
+
+  //     if (!reader) {
+  //       std::cout << "unable to open " << poolPath.str() << std::endl;
+  //       Rf_error("unable to open file!");
+  //       return;
+  //     }
+  //   }
+
+  //   // Initialize the deserializing stream
+  //   R_inpstream_st inputStream;
+  //   R_InitFileInPStream(&inputStream, reader, R_pstream_binary_format, NULL, R_NilValue);
+
+  //   SEXP poolDataContainer;
+  //   PROTECT(poolDataContainer = R_Unserialize(&inputStream));
+
+  //   // load bitcode
+  //   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> mb = llvm::MemoryBuffer::getFile(bitcodePath.str().c_str());
+  //   llvm::orc::ThreadSafeContext TSC = std::make_unique<llvm::LLVMContext>();
+
+  //   // Load the memory buffer into a LLVM module
+  //   llvm::Expected<std::unique_ptr<llvm::Module>> llModuleHolder = llvm::parseBitcodeFile(mb->get()->getMemBufferRef(), *TSC.getContext());
+
+  //   // ModuleManager to run our passes on the bitcodes
+  //   ModuleManager MM(*llModuleHolder.get().get());
+
+  //   MM.runPasses();
+
+  //   auto callSiteCounterRes = MM.getRshCallSiteCounterRes();
+
+  //   unsigned weight = 0;
+  //   for (auto & ele : callSiteCounterRes) {
+  //     weight += ele.second * RshBuiltinWeights::getWeight(ele.first().str());
+  //   }
+    
+  //   #if DEBUG_ANALYSIS == 1
+  //   std::cout << "    == CALL SITE OPCODE SIMILARITY ==" << std::endl;
+  //   for (auto & ele : callSiteCounterRes) {
+  //     std::cout << "      " << ele.first().str() << " : " << ele.second << "[" << (ele.second * RshBuiltinWeights::getWeight(ele.first().str())) << "]" << std::endl;
+  //   }
+  //   std::cout << "        " << "Total : " << weight << std::endl;
+  //   #endif
+
+  //   weightAnalysis[c] = weight;
+
+  //   std::string mainFunName(CHAR(STRING_ELT(VECTOR_ELT(rir::SerializedPool::getFNames(poolDataContainer), 0), 0)));
+
+  //   // std::cout << c.toI() << " --> " << mainFunName << std::endl;
+
+
+  //   auto argTrackRes = MM.getRshArgumentEffectSimpleRes();
+  //   for (auto & ele : argTrackRes) {
+  //     auto currFun = ele.first;
+  //     auto currFunData = ele.second;
+  //     if (currFun->getName().str() == mainFunName) {
+  //       simpleArgumentAnalysis[c] = currFunData;
+  //       break;
+  //     }
+  //   }
+
+  //   #if DEBUG_ANALYSIS == 1
+  //   std::cout << "    == ARG EFFECT TRACKING ==" << std::endl;
+  //   for (auto & ele : argTrackRes) {
+  //     auto currFun = ele.first;
+  //     auto currFunData = ele.second;
+  //     std::cout << "      Function: " << currFun->getName().str() << std::endl;
+  //     for (auto & data : currFunData) {
+  //       unsigned argIdx = data.first;
+  //       auto calledFuns = data.second; 
+  //       std::cout << "        [arg" << argIdx << "]: ";
+  //       for (auto & funName : calledFuns) {
+  //         std::cout << funName << " -- ";
+  //       }
+  //       std::cout << std::endl;
+  //     }
+  //   }
+  //   #endif
+
+  //   auto funcCallBFRes = MM.getFunctionCallBreathFirstRes();
+  //   for (auto & ele : funcCallBFRes) {
+  //     auto currFunName = ele.first().str();
+  //     auto currFunData = ele.second;
+  //     if (currFunName == mainFunName) {
+  //       std::vector<std::set<std::string>> fc;
+  //       for (auto & e : currFunData) fc.push_back(e.getFunctionSet());
+  //       funCallBFData[c] = fc;
+  //       break;
+  //     }
+  //   }
+
+  //   #if DEBUG_ANALYSIS == 1
+  //   std::cout << "    == FUN CALL BF ==" << std::endl;
+  //   for (auto & ele : funcCallBFRes) {
+  //     auto currFunName = ele.first().str();
+  //     auto currFunData = ele.second;
+  //     std::cout << "      " << currFunName;
+  //     if (currFunName == mainFunName) {
+  //       std::cout << " [MAIN]";
+  //     }
+  //     std::cout << std::endl;
+  //     unsigned i = 0;
+  //     for (auto & e : currFunData) {
+  //       std::cout << "        " << ++i << ": " << e.getNodeCompressedName() << std::endl;
+  //     }
+  //   }
+
+  //   #endif
+
+  //   UNPROTECT(1);
+
+
+  // });
+  // call(contextsVec, weightAnalysis, simpleArgumentAnalysis, funCallBFData);
 }
 
 
 
-void compareContexts(std::vector<Context> & contextsVec, ComparisonCallback call) {
+void compareContexts(std::vector<rir::Context> & contextsVec, ComparisonCallback call) {
   bool noStrictComparison = getenv("DISABLE_STRICT_COMPARISON") ? true : false;
   bool noRoughComparison = getenv("DISABLE_ROUGH_COMPARISON") ? true : false;
   for (auto it_currCon = contextsVec.begin(); it_currCon != contextsVec.end(); ++it_currCon) {

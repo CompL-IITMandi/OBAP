@@ -3,3 +3,7 @@ build/
 .vscode/
 out
 run.sh
+commonRepository/
+packagewiseRepository/
+getReposFromServer.sh
+runTest.sh

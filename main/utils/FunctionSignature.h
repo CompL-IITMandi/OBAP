@@ -5,6 +5,8 @@
 
 #include "Rinternals.h"
 
+namespace rir {
+
 struct FunctionSignature {
     enum class Environment {
         CallerProvided,
@@ -16,6 +18,27 @@ struct FunctionSignature {
         Optimized,
         Contextual,
     };
+
+    // static FunctionSignature deserialize(SEXP refTable, R_inpstream_t inp) {
+    //     Environment envc = (Environment)InInteger(inp);
+    //     OptimizationLevel opt = (OptimizationLevel)InInteger(inp);
+    //     unsigned numArgs = InInteger(inp);
+    //     FunctionSignature sig(envc, opt);
+    //     sig.numArguments = numArgs;
+    //     sig.dotsPosition = InInteger(inp);
+    //     sig.hasDotsFormals = InInteger(inp);
+    //     sig.hasDefaultArgs = InInteger(inp);
+    //     return sig;
+    // }
+
+    // void serialize(SEXP refTable, R_outpstream_t out) const {
+    //     OutInteger(out, (int)envCreation);
+    //     OutInteger(out, (int)optimization);
+    //     OutInteger(out, numArguments);
+    //     OutInteger(out, dotsPosition);
+    //     OutInteger(out, hasDotsFormals);
+    //     OutInteger(out, hasDefaultArgs);
+    // }
 
     void pushFormal(SEXP arg, SEXP name) {
         if (arg != R_MissingArg)
@@ -48,3 +71,5 @@ struct FunctionSignature {
     bool hasDefaultArgs = false;
     size_t dotsPosition = -1;
 };
+
+} // namespace rir

@@ -1,35 +1,17 @@
-#ifndef JSON_ITER_H
-#define JSON_ITER_H
-
-#include "nlohmann/json.hpp"
-#include "rir/Context.h"
+#pragma once
+#include "runtime/Context.h"
 #include <iostream>
 #include <functional>
 #include <set>
-
+#include <unordered_map>
+#include <vector>
+#include <set>
 typedef struct SEXPREC* SEXP;
-
-using json = nlohmann::json;
 
 class GlobalData {
   public:
     static std::string bitcodesFolder;
 };
-
-// IterCallback
-// 1. (string) meta file name
-// 2. (string) hast
-// 3. (string) name
-// 4. (string) offset
-// 4. (json) contextMap
-
-typedef std::function<void(
-                          const std::string &, 
-                          const std::string &, 
-                          const std::string &, 
-                          const std::string &, 
-                          json &)>
-                            IterCallback;
 
 // AnalysisCallback
 // 1. (vector) contexts
@@ -37,14 +19,12 @@ typedef std::function<void(
 // 3. (unordered map) simple argument effect analysis, for each argument get a vector of called functions
 // 4. (unordered map) breadth first call data, get leveled function call data
 typedef std::function<void(
-                          std::vector<Context> &, 
-                          std::unordered_map<Context, unsigned> &, 
-                          std::unordered_map<Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > &,
-                          std::unordered_map<Context, std::vector<std::set<std::string>>> &
+                          std::vector<rir::Context> &, 
+                          std::unordered_map<rir::Context, unsigned> &, 
+                          std::unordered_map<rir::Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > &,
+                          std::unordered_map<rir::Context, std::vector<std::set<std::string>>> &
                           )>
                             AnalysisCallback;
-
-void iterateOverBitcodes(json & processedJson, IterCallback call);
 
 // void doAnalysisOverContexts(const std::string & pathPrefix, json & contextMap, AnalysisCallback call);
 void doAnalysisOverContexts(const std::string & pathPrefix, SEXP cDataContainer, AnalysisCallback call);
@@ -61,11 +41,9 @@ enum ComparisonType {
 // 2. (Context) context2
 // 3. (ComparisonType) type
 typedef std::function<void(
-                          Context &,
-                          Context &,
+                          rir::Context &,
+                          rir::Context &,
                           const ComparisonType &
                           )>
                             ComparisonCallback;
-void compareContexts(std::vector<Context> & contextsVec, ComparisonCallback call);
-
-#endif
+void compareContexts(std::vector<rir::Context> & contextsVec, ComparisonCallback call);

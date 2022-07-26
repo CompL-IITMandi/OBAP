@@ -1,5 +1,8 @@
 #include "Context.h"
 
+namespace rir {
+
+
 std::ostream& operator<<(std::ostream& out, Assumption a) {
     switch (a) {
     case Assumption::NoExplicitlyMissingArgs:
@@ -67,41 +70,4 @@ std::ostream& operator<<(std::ostream& out, const Context& a) {
     return out;
 }
 
-constexpr std::array<TypeAssumption, Context::NUM_TYPED_ARGS>
-    Context::EagerContext;
-constexpr std::array<TypeAssumption, Context::NUM_TYPED_ARGS>
-    Context::NotObjContext;
-constexpr std::array<TypeAssumption, Context::NUM_TYPED_ARGS>
-    Context::SimpleIntContext;
-constexpr std::array<TypeAssumption, Context::NUM_TYPED_ARGS>
-    Context::SimpleRealContext;
-constexpr std::array<TypeAssumption, Context::NUM_TYPED_ARGS>
-    Context::NonReflContext;
-
-
-unsigned Context::isImproving(const Context& other, bool hasDotsFormals,
-                              bool hasDefaultArgs) const {
-    assert(smaller(other));
-
-    if (other == *this)
-        return 0;
-    auto normalized = *this;
-
-    if (!hasDotsFormals)
-        normalized.remove(Assumption::StaticallyArgmatched);
-    if (!hasDefaultArgs)
-        normalized.remove(Assumption::NoExplicitlyMissingArgs);
-
-    // These don't pay of that much...
-    normalized.clearObjFlags();
-
-    if (hasDotsFormals || hasDefaultArgs) {
-        if (normalized.numMissing() != other.numMissing())
-            return 20;
-    } else {
-        normalized.numMissing(other.numMissing());
-    }
-
-    auto diff = normalized.toI() & (~other.toI());
-    return 2 * __builtin_popcount(diff);
-}
+} // namespace rir

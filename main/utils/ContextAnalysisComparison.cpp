@@ -1,15 +1,16 @@
 #include "utils/ContextAnalysisComparison.h"
 #include <string>
+#include <algorithm>
 
 #define DEBUG_COMPARISONS 0
 
-static bool checkWeightSimilarity(Context & c1, Context & c2, std::unordered_map<Context, unsigned> & weightAnalysis) {
+static bool checkWeightSimilarity(rir::Context & c1, rir::Context & c2, std::unordered_map<rir::Context, unsigned> & weightAnalysis) {
   auto diff = weightAnalysis[c1] - weightAnalysis[c2];
   if (diff < 0) diff = -diff;
   return (diff <= ContextAnalysisComparison::THRESHOLD_WEIGHT);
 }
 
-static bool checkFunCallSimilarity(Context & c1, Context & c2, std::unordered_map<Context, std::vector<std::set<std::string>>> & funCallBFData) {
+static bool checkFunCallSimilarity(rir::Context & c1, rir::Context & c2, std::unordered_map<rir::Context, std::vector<std::set<std::string>>> & funCallBFData) {
   auto currV = funCallBFData[c1];
   auto otherV = funCallBFData[c2];
   auto levelsInCurrent = currV.size();
@@ -54,8 +55,8 @@ static void tokenize(std::set<std::string> & res, std::string s, std::string del
   // std::cout << s.substr(start, end - start);
 }
 
-static std::pair<bool, Context> checkArgEffectSimilarity(Context & c1, Context & c2, Context diffCon,  std::unordered_map<Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > & simpleArgumentAnalysis) {
-  Context maskPart;
+static std::pair<bool, rir::Context> checkArgEffectSimilarity(rir::Context & c1, rir::Context & c2, rir::Context diffCon,  std::unordered_map<rir::Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > & simpleArgumentAnalysis) {
+  rir::Context maskPart;
 
   auto c1AffectedArgs = c1.getAffectedArguments();
   auto c2AffectedArgs = c2.getAffectedArguments();
@@ -276,10 +277,10 @@ static std::pair<bool, Context> checkArgEffectSimilarity(Context & c1, Context &
   //     }
   //   }
   // }
-  return std::pair<bool, Context>(atleastOneSimilar, maskPart);
+  return std::pair<bool, rir::Context>(atleastOneSimilar, maskPart);
 }
 
-Context ContextAnalysisComparison::getDiff() {
+rir::Context ContextAnalysisComparison::getDiff() {
   switch (type) {
     case ComparisonType::STRICT: {
       return (c2 - c1);
@@ -290,10 +291,10 @@ Context ContextAnalysisComparison::getDiff() {
       return res.getArgRealtedContext();
     }
   }
-  return Context(0ul);
+  return rir::Context(0ul);
 }
 
-bool ContextAnalysisComparison::safeToRemoveContext(const Context & mask) {
+bool ContextAnalysisComparison::safeToRemoveContext(const rir::Context & mask) {
   if (type == ComparisonType::STRICT) {
     if (mask.toI() == getDiff().toI()) {
       return true;
@@ -302,12 +303,12 @@ bool ContextAnalysisComparison::safeToRemoveContext(const Context & mask) {
   return false;
 }
 
-Context ContextAnalysisComparison::getMask(
-  std::unordered_map<Context, unsigned> & weightAnalysis,
-  std::unordered_map<Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > & simpleArgumentAnalysis,
-  std::unordered_map<Context, std::vector<std::set<std::string>>> & funCallBFData
+rir::Context ContextAnalysisComparison::getMask(
+  std::unordered_map<rir::Context, unsigned> & weightAnalysis,
+  std::unordered_map<rir::Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > & simpleArgumentAnalysis,
+  std::unordered_map<rir::Context, std::vector<std::set<std::string>>> & funCallBFData
   ) {
-  Context mask;
+  rir::Context mask;
 
   static bool ANALYSIS_WT = getenv("ANALYSIS_WT") ? 1 : 0;
   static bool ANALYSIS_FUNCALL_BF = getenv("ANALYSIS_FUNCALL_BF") ? 1 : 0;

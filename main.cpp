@@ -10,8 +10,7 @@
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "rir/Context.h"
-#include "nlohmann/json.hpp"
+#include "runtime/Context.h"
 #include "opt/ModuleManager.h"
 #include "utils/hasse.h"
 
@@ -24,8 +23,10 @@
 #include "dirent.h"
 #include <unistd.h>
 
+#include <fcntl.h>
+#include <sys/stat.h>
+
 #include "Rinternals.h"
-using json = nlohmann::json;
 
 std::unordered_map<std::string, unsigned> RshBuiltinWeights::weightMap;
 
@@ -83,24 +84,24 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
         fclose(reader);
 
         // Get serialized metadata
-        REnvHandler offsetMapHandler(serializerData::getBitcodeMap(serDataContainer));
+        REnvHandler offsetMapHandler(rir::serializerData::getBitcodeMap(serDataContainer));
 
         offsetMapHandler.iterate([&] (SEXP offsetIndex, SEXP contextMap) {
-          Context mask;
-          Context oldMask;
+          rir::Context mask;
+          rir::Context oldMask;
           REnvHandler contextMapHandler(contextMap);
           if (SEXP existingMaskContainer = contextMapHandler.get(maskSym)){
-            mask = oldMask = Context(*((unsigned long *) DATAPTR(existingMaskContainer)));
+            mask = oldMask = rir::Context(*((unsigned long *) DATAPTR(existingMaskContainer)));
           }
 
-          maskDataStream << CHAR(PRINTNAME(serializerData::getHast(serDataContainer))) << "_" << CHAR(PRINTNAME(offsetIndex)) << " ";
+          maskDataStream << CHAR(PRINTNAME(rir::serializerData::getHast(serDataContainer))) << "_" << CHAR(PRINTNAME(offsetIndex)) << " ";
 
 
           // We are now processing a function, non zero index indicates an inner function
           std::set<unsigned long> toRemove;
 
           std::stringstream pathPrefix;
-          pathPrefix << folderPath << "/" << CHAR(PRINTNAME(serializerData::getHast(serDataContainer))) << "_" << CHAR(PRINTNAME(offsetIndex)) << "_";
+          pathPrefix << folderPath << "/" << CHAR(PRINTNAME(rir::serializerData::getHast(serDataContainer))) << "_" << CHAR(PRINTNAME(offsetIndex)) << "_";
 
           
 
@@ -108,10 +109,10 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
             pathPrefix.str(),
             contextMap,
             [&] (
-              std::vector<Context> & contextsVec, 
-              std::unordered_map<Context, unsigned> & weightAnalysis, 
-              std::unordered_map<Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > & simpleArgumentAnalysis,
-              std::unordered_map<Context, std::vector<std::set<std::string>>> & funCallBFData
+              std::vector<rir::Context> & contextsVec, 
+              std::unordered_map<rir::Context, unsigned> & weightAnalysis, 
+              std::unordered_map<rir::Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > & simpleArgumentAnalysis,
+              std::unordered_map<rir::Context, std::vector<std::set<std::string>>> & funCallBFData
             )  {
 
               if (contextsVec.size() > 1) {
@@ -119,7 +120,7 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
                 totalContexts += contextsVec.size();
               }
 
-              compareContexts(contextsVec, [&] (Context & c1, Context & c2, const ComparisonType & t) {
+              compareContexts(contextsVec, [&] (rir::Context & c1, rir::Context & c2, const ComparisonType & t) {
                 // C1 -- Less specialized
                 // C2 -- More specialized
                 ContextAnalysisComparison cac(c1, c2, t);
@@ -228,6 +229,26 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
 
 }
 
+// https://stackoverflow.com/questions/46728680/how-to-temporarily-suppress-output-from-printf
+int supress_stdout() {
+  fflush(stdout);
+
+  int ret = dup(1);
+  int nullfd = open("/dev/null", O_WRONLY);
+  // check nullfd for error omitted
+  dup2(nullfd, 1);
+  close(nullfd);
+
+  return ret;
+}
+
+void resume_stdout(int fd) {
+  fflush(stdout);
+  dup2(fd, 1);
+  close(fd);
+}
+
+
 int main(int argc, char** argv) {
 
   bool rHomeSet = getenv("R_HOME") ? true : false;
@@ -238,12 +259,22 @@ int main(int argc, char** argv) {
     exit(EXIT_FAILURE);
   }
 
-  Rf_initEmbeddedR(argc, argv);
+  std::cout.setstate(std::ios_base::failbit);
+  int fd = supress_stdout();
+  int status = Rf_initEmbeddedR(argc, argv);
+  if (status < 0) {
+    std::cerr << "R initialization failed." << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  resume_stdout(fd);
+  std::cout.clear();
 
   if (argc != 2) {
     std::cerr << "Usage: bcp path_to_folder" << std::endl;
     exit(EXIT_FAILURE);
   }
+
+  std::cerr << "R initialization successful!" << std::endl;
 
   auto bitcodesFolder = argv[1];
   GlobalData::bitcodesFolder = bitcodesFolder;

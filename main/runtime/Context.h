@@ -1,12 +1,16 @@
 #ifndef PIR_ASSUMPTIONS_H
 #define PIR_ASSUMPTIONS_H
 
-#include "EnumSet.h"
+#include "utils/EnumSet.h"
 
+// #include <R/r_incl.h>
 #include <array>
 #include <cstring>
 #include <iostream>
 #include <set>
+
+namespace rir {
+
 enum class TypeAssumption {
     // Arg is already evaluated
     Arg0IsEager_,
@@ -62,6 +66,10 @@ enum class Assumption {
     LAST = StaticallyArgmatched,
 };
 
+// struct Function;
+// namespace pir {
+// class ClosureVersion;
+// }
 #pragma pack(push)
 #pragma pack(1)
 struct Context {
@@ -162,21 +170,21 @@ struct Context {
     }
     constexpr Context operator|(const Context& other) const {
 
-        // if (missing != other.missing) {
+        if (missing != other.missing) {
 
-        //     auto minContext = this;
+            auto minContext = this;
 
-        //     if (missing > other.missing) {
-        //         minContext = &other;
-        //     }
+            if (missing > other.missing) {
+                minContext = &other;
+            }
 
-        //     if (minContext->flags.contains(
-        //             Assumption::NoExplicitlyMissingArgs)) {
-        //         assert(false && "Contexts are not compatible for | operator");
-        //     }
-        // }
+            if (minContext->flags.contains(
+                    Assumption::NoExplicitlyMissingArgs)) {
+                assert(false && "Contexts are not compatible for | operator");
+            }
+        }
 
-        auto newMissing = 0;
+        auto newMissing = other.missing > missing ? other.missing : missing;
         return Context(other.flags | flags, other.typeFlags | typeFlags,
                        newMissing);
     }
@@ -396,10 +404,14 @@ struct Context {
         return res;
     }
 
-    unsigned isImproving(const Context& other, bool hasDotsFormals,
-                         bool hasDefaultArgs) const;
+    // unsigned isImproving(rir::Function*) const;
+    // unsigned isImproving(rir::pir::ClosureVersion*) const;
+    // unsigned isImproving(const Context& other, bool hasDotsFormals,
+    //                      bool hasDefaultArgs) const;
+    // static Context deserialize(SEXP refTable, R_inpstream_t inp);
+    // void serialize(SEXP refTable, R_outpstream_t out) const;
 
-    friend struct std::hash<Context>;
+    friend struct std::hash<rir::Context>;
     friend std::ostream& operator<<(std::ostream& out, const Context& a);
 
     void clearExcept(const Flags& filter) {
@@ -422,6 +434,7 @@ struct Context {
             resetNotObj(i);
     }
 
+    // void setSpecializationLevel(int level);
 
     Context operator-(const Context& other) const {
         return Context(flags & ~other.flags, typeFlags & ~other.typeFlags,
@@ -443,7 +456,19 @@ struct Context {
 
     TypeFlags getTypeFlags() const { return typeFlags; }
 
-//   private:
+    void curbContextWithMask(const Context & other) {
+        for (auto i = other.flags.begin(); i != other.flags.end(); ++i) {
+            if (flags.includes(*i)) {
+                flags.reset(*i);
+            }
+        }
+        for (auto i = other.typeFlags.begin(); i != other.typeFlags.end(); ++i) {
+            if (typeFlags.includes(*i)) {
+                typeFlags.reset(*i);
+            }
+        }
+    }
+  private:
     Flags flags;
     TypeFlags typeFlags;
     uint8_t missing = 0;
@@ -458,11 +483,12 @@ static_assert(sizeof(Context) == 2 * sizeof(Immediate),
 std::ostream& operator<<(std::ostream& out, Assumption a);
 std::ostream& operator<<(std::ostream& out, TypeAssumption a);
 
+} // namespace rir
 
 namespace std {
 template <>
-struct hash<Context> {
-    std::size_t operator()(const Context& v) const {
+struct hash<rir::Context> {
+    std::size_t operator()(const rir::Context& v) const {
         return hash_combine(
             hash_combine(hash_combine(0, v.flags.to_i()), v.typeFlags.to_i()),
             v.missing);

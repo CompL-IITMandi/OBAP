@@ -2,10 +2,12 @@
 
 #include "utils/UMap.h"
 #include "utils/FunctionSignature.h"
-#include "rir/Context.h"
+#include "runtime/TypeFeedback.h"
+#include "runtime/Context.h"
 
 #define PRINT_EXTENDED_CHILDREN 0
 
+namespace rir {
     class SerializedPool {
         // 0 (rir::FunctionSignature) Function Signature
         // 1 (SEXP) Function Names
@@ -38,10 +40,10 @@
         }
 
         // ENTRY 0: Function Signature
-        static void addFS(SEXP container, const FunctionSignature & fs) {
+        static void addFS(SEXP container, const rir::FunctionSignature & fs) {
             SEXP store;
             PROTECT(store = Rf_allocVector(RAWSXP, sizeof(fs)));
-            FunctionSignature * tmp = (FunctionSignature *) DATAPTR(store);
+            rir::FunctionSignature * tmp = (rir::FunctionSignature *) DATAPTR(store);
             #if defined(__GNUC__) || defined(__GNUG__)
                 #pragma GCC diagnostic push
                 #pragma GCC diagnostic ignored "-Wclass-memaccess"
@@ -57,9 +59,9 @@
             UNPROTECT(1);
         }
 
-        static FunctionSignature getFS(SEXP container) {
+        static rir::FunctionSignature getFS(SEXP container) {
             SEXP dataContainer = VECTOR_ELT(container, 0);
-            FunctionSignature* res = (FunctionSignature *) DATAPTR(dataContainer);
+            rir::FunctionSignature* res = (rir::FunctionSignature *) DATAPTR(dataContainer);
             return *res;
         }
 
@@ -123,7 +125,7 @@
             space += 2;
 
             printSpace(space);
-            FunctionSignature fs = getFS(container);
+            rir::FunctionSignature fs = getFS(container);
             std::cout << "ENTRY(0)[Function Signature]: " << (int)fs.envCreation << ", " << (int)fs.optimization << ", " <<  fs.numArguments << ", " << fs.hasDotsFormals << ", " << fs.hasDefaultArgs << ", " << fs.dotsPosition << std::endl;
             printSpace(space);
             std::cout << "ENTRY(1)[Function names]: [ ";
@@ -215,10 +217,16 @@
         // 0 (unsigned long) unsigned long
         // 1 (SEXP) reqMapForCompilation
 
+        // 2 (SEXP) Type Feedback Info
+        // It is stored as a linearized list of the TypeFeedback from the mainCodeObj.
+
+        // 3 (unsigned int) creationIndex
+        // Within a run this index is unique, handle merging across program runs this is invalid.
+
         public:
             // Misc functions
             static unsigned getStorageSize() {
-                return 2;
+                return 4;
             }
 
             static void addSEXP(SEXP container, SEXP data, const int & index) {
@@ -236,6 +244,7 @@
                 }
             }
 
+            static void addObservedValueToVector(SEXP container, ObservedValues * observedVal);
             // ENTRY 0: Con
             static void addContext(SEXP container, const unsigned long & data) {
                 SEXP store;
@@ -292,13 +301,40 @@
                 }
             }
 
+            // ENTRY 2: TypeFeedbackData
+            static void addTF(SEXP container, SEXP data) {
+                addSEXP(container, data, 2);
+            }
+
+            static SEXP getTF(SEXP container) {
+                return getSEXP(container, 2);
+            }
+
+            // ENTRY 3: creationIndex
+            static void addCI(SEXP container) {
+                static unsigned int CI = 0;
+                SEXP store;
+                PROTECT(store = Rf_allocVector(RAWSXP, sizeof(unsigned int)));
+                unsigned int * tmp = (unsigned int *) DATAPTR(store);
+                *tmp = CI;
+                CI++;
+                SET_VECTOR_ELT(container, 3, store);
+                UNPROTECT(1);
+            }
+
+            static unsigned int getCI(SEXP container) {
+                SEXP dataContainer = VECTOR_ELT(container, 3);
+                unsigned int* res = (unsigned int *) DATAPTR(dataContainer);
+                return *res;
+            }
+
             static void print(SEXP container, unsigned int space) {
                 printSpace(space);
                 std::cout << "== contextData ==" << std::endl;
                 space += 2;
 
                 printSpace(space);
-                std::cout << "ENTRY(0)[Context]: " << Context(getContext(container)) << std::endl;
+                std::cout << "ENTRY(0)[Context]: " << rir::Context(getContext(container)) << std::endl;
                 space += 2;
 
                 printSpace(space);
@@ -309,7 +345,21 @@
                     std::cout << CHAR(PRINTNAME(ele)) << " ";
                 }
                 std::cout << ">" << std::endl;
-                std::cout << "Print Done" << std::endl;
+                printSpace(space);
+                SEXP tfContainer = getTF(container);
+                std::cout << "ENTRY(2)[Type Feedback Info](" << Rf_length(tfContainer) / (int) sizeof(ObservedValues) << " Entries): <";
+                ObservedValues * tmp = (ObservedValues *) DATAPTR(tfContainer);
+                for (int i = 0; i < Rf_length(tfContainer) / (int) sizeof(ObservedValues); i++) {
+                    std::cout << " [";
+                    tmp[i].print(std::cout);
+                    if (i + 1 != Rf_length(tfContainer) / (int) sizeof(ObservedValues)) {
+                        std::cout << "]";
+                    }
+                }
+                std::cout << ">" << std::endl;
+
+                printSpace(space);
+                std::cout << "ENTRY(3)[Creation Index]: " << getCI(container) << std::endl;
             }
     };
 
@@ -389,6 +439,7 @@
 
             // ENTRY 2: Add Context Data
             static void addBitcodeData(SEXP container, SEXP offsetSym, SEXP context, SEXP cData) {
+                using namespace std::chrono;
                 SEXP offsetEnvContainer = ensureAndGetOffsetEnv(container, offsetSym);
 
                 REnvHandler currMap(offsetEnvContainer);
@@ -398,7 +449,11 @@
                     ss << CHAR(PRINTNAME(getHast(container))) << "_" << CHAR(PRINTNAME(context));
                     contextData::removeEleFromReqMap(cData, Rf_install(ss.str().c_str()));
                 }
-                currMap.set(context, cData);
+
+                contextData::addCI(cData);
+
+                SEXP conKey = Rf_install(std::to_string(system_clock::now().time_since_epoch().count()).c_str());
+                currMap.set(conKey, cData);
             }
 
             // static void addBitcodeData(SEXP container, int offset, std::string context, SEXP cData) {
@@ -456,7 +511,7 @@
                 iterate(container, [&](SEXP offsetSym, SEXP conSym, SEXP cData, bool isMask) {
                     if (!isMask) {
                         printSpace(space);
-                        std::cout << "At Offset: " << CHAR(PRINTNAME(offsetSym)) << ", Context: " << CHAR(PRINTNAME(conSym)) << std::endl;
+                        std::cout << "At Offset: " << CHAR(PRINTNAME(offsetSym)) << ", Epoch: " << CHAR(PRINTNAME(conSym)) << std::endl;
                         contextData::print(cData, space+2);
                     } else {
                         printSpace(space);
@@ -466,3 +521,4 @@
 
             }
     };
+};;

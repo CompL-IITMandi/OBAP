@@ -1,7 +1,7 @@
 #ifndef HASSE_H
 #define HASSE_H
 
-#include "rir/Context.h"
+#include "runtime/Context.h"
 
 class Hasse {
   // private:

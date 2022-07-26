@@ -70,7 +70,7 @@ set(CMAKE_EXE_LINKER_FLAGS
 include_directories(SYSTEM "./main")
 
 # Add all cpp sources
-file(GLOB_RECURSE SRC "main/opt/*.cpp" "main/rir/*.cpp" "main/utils/*.cpp")
+file(GLOB_RECURSE SRC "main/runtime/*.cpp" "main/opt/*.cpp" "main/rir/*.cpp" "main/utils/*.cpp")
 
 add_executable(${PROJECT_NAME} main.cpp ${SRC})
 
