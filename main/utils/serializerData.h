@@ -7,6 +7,7 @@
 
 #define PRINT_EXTENDED_CHILDREN 0
 
+#include <chrono>
 namespace rir {
     class SerializedPool {
         // 0 (rir::FunctionSignature) Function Signature
@@ -438,7 +439,7 @@ namespace rir {
             }
 
             // ENTRY 2: Add Context Data
-            static void addBitcodeData(SEXP container, SEXP offsetSym, SEXP context, SEXP cData) {
+            static SEXP addBitcodeData(SEXP container, SEXP offsetSym, SEXP context, SEXP cData) {
                 using namespace std::chrono;
                 SEXP offsetEnvContainer = ensureAndGetOffsetEnv(container, offsetSym);
 
@@ -454,6 +455,8 @@ namespace rir {
 
                 SEXP conKey = Rf_install(std::to_string(system_clock::now().time_since_epoch().count()).c_str());
                 currMap.set(conKey, cData);
+
+                return conKey;
             }
 
             // static void addBitcodeData(SEXP container, int offset, std::string context, SEXP cData) {
