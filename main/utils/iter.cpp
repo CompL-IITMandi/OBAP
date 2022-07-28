@@ -6,12 +6,22 @@
 #include "opt/ModuleManager.h"
 #include <algorithm>
 #include "utils/serializerData.h"
+#include <thread>
+
+#include <chrono>
+using namespace std::chrono;
+
 
 #define DEBUG_ANALYSIS 1
 #define DEBUG_SLOT_SELECTION 0
-#define DEBUG_SLOT_SELECTION_READABLE 1
+#define DEBUG_SLOT_SELECTION_READABLE 0
 
-#define MAX_SLOTS 5
+#define PRING_CSV_DATA 0
+
+#define MAX_SLOTS 7
+
+#define TICK_TICK_LAP_COUNT 1000000
+#define MAX_POOL_SIZE 10000
 
 typedef std::vector<rir::ObservedValues> TFVector;
 
@@ -28,44 +38,135 @@ inline TFVector getFeedbackAsVector(SEXP cData) {
 }
 
 
-// https://stackoverflow.com/questions/5095407/all-combinations-of-k-elements-out-of-n
-template <typename Iterator>
-inline bool next_combination(const Iterator first, Iterator k, const Iterator last) {
-   /* Credits: Thomas Draper */
-   if ((first == last) || (first == k) || (last == k))
-      return false;
-   Iterator itr1 = first;
-   Iterator itr2 = last;
-   ++itr1;
-   if (last == itr1)
-      return false;
-   itr1 = last;
-   --itr1;
-   itr1 = k;
-   --itr2;
-   while (first != itr1)
-   {
-      if (*--itr1 < *itr2)
-      {
-         Iterator j = k;
-         while (!(*itr1 < *j)) ++j;
-         std::iter_swap(itr1,j);
-         ++itr1;
-         ++j;
-         itr2 = k;
-         std::rotate(itr1,j,last);
-         while (last != j)
-         {
-            ++j;
-            ++itr2;
-         }
-         std::rotate(k,itr2,last);
-         return true;
-      }
-   }
-   std::rotate(first,k,last);
-   return false;
+// // https://stackoverflow.com/questions/5095407/all-combinations-of-k-elements-out-of-n
+// template <typename Iterator>
+// inline bool next_combination(const Iterator first, Iterator k, const Iterator last) {
+//    /* Credits: Thomas Draper */
+//    if ((first == last) || (first == k) || (last == k))
+//       return false;
+//    Iterator itr1 = first;
+//    Iterator itr2 = last;
+//    ++itr1;
+//    if (last == itr1)
+//       return false;
+//    itr1 = last;
+//    --itr1;
+//    itr1 = k;
+//    --itr2;
+//    while (first != itr1)
+//    {
+//       if (*--itr1 < *itr2)
+//       {
+//          Iterator j = k;
+//          while (!(*itr1 < *j)) ++j;
+//          std::iter_swap(itr1,j);
+//          ++itr1;
+//          ++j;
+//          itr2 = k;
+//          std::rotate(itr1,j,last);
+//          while (last != j)
+//          {
+//             ++j;
+//             ++itr2;
+//          }
+//          std::rotate(k,itr2,last);
+//          return true;
+//       }
+//    }
+//    std::rotate(first,k,last);
+//    return false;
+// }
+
+class CombinationsIndexArray {
+    std::vector<int> index_array;
+    int last_index;
+    public:
+    CombinationsIndexArray(int number_of_things_to_choose_from, int number_of_things_to_choose_in_one_combination) {
+        last_index = number_of_things_to_choose_from - 1;
+        for (int i = 0; i < number_of_things_to_choose_in_one_combination; i++) {
+            index_array.push_back(i);
+        }
+    }
+    int operator[](int i) {
+        return index_array[i];
+    }
+    int size() {
+        return index_array.size();
+    }
+    bool advance() {
+
+        int i = index_array.size() - 1;
+        if (index_array[i] < last_index) {
+            index_array[i]++;
+            return true;
+        } else {
+            while (i > 0 && index_array[i-1] == index_array[i]-1) {
+                i--;
+            }
+            if (i == 0) {
+                return false;
+            } else {
+                index_array[i-1]++;
+                while (i < index_array.size()) {
+                    index_array[i] = index_array[i-1]+1;
+                    i++;
+                }
+                return true;
+            }
+        }
+    }
+};
+
+// https://stackoverflow.com/questions/9330915/number-of-combinations-n-choose-r-in-c
+unsigned nChoosek( unsigned n, unsigned k ){
+    if (k > n) return 0;
+    if (k * 2 > n) k = n-k;
+    if (k == 0) return 1;
+
+    int result = n;
+    for( int i = 2; i <= k; ++i ) {
+        result *= (n-i+1);
+        result /= i;
+    }
+    return result;
 }
+
+class Ticker {
+  public:
+    Ticker(unsigned int totalCycles) : remainingCycles(totalCycles), total(totalCycles) {
+      start = std::chrono::high_resolution_clock::now();
+    }
+
+    void lap(unsigned int completedCycles) {
+      auto end = std::chrono::high_resolution_clock::now();
+      auto duration = duration_cast<milliseconds>(end - start);
+      remainingCycles = remainingCycles - completedCycles;
+      double timeForOneCycleInMs = (double) duration.count() / completedCycles;
+      averageTimePerThread += timeForOneCycleInMs;
+      checks++;
+      double remainingTotalTimeInMs = timeForOneCycleInMs * remainingCycles;
+      auto completedPercent = (total - remainingCycles) / (double) total;
+      std::cout << "=== TICK TICK ===" << std::endl;
+      std::cout << "Done(" << (total - remainingCycles) << "/" << total << ")" << std::endl; 
+      std::cout << "Completed: " << (completedPercent*100) << "%" << std::endl;       
+      std::cout << "Remaining time estimate: " << (remainingTotalTimeInMs/(1000 * 60)) << " minutes" << std::endl;
+      std::cout << "=================" << std::endl;
+
+      start = std::chrono::high_resolution_clock::now();
+    }
+
+    unsigned int getAverageThreadTime() {
+      if (checks == 0) return 0;
+      return (unsigned int) (averageTimePerThread / checks);
+    }
+
+  private:
+    double averageTimePerThread = 0;
+    int checks = 0;
+    std::chrono::high_resolution_clock::time_point start;
+    unsigned int total, remainingCycles, tocks;
+
+};
 
 
 class TVGraph {
@@ -119,7 +220,7 @@ class TVGraph {
     }
 
     // Returns true if the given indexes uniquely differentiate between type versions
-    bool checkValidity(std::vector<int> & indices) {
+    bool checkValidity(std::vector<int> & indices, bool printDebug=false) {
       std::vector<std::vector<uint32_t>> res;
 
       #if DEBUG_SLOT_SELECTION == 1
@@ -181,58 +282,122 @@ class TVGraph {
         }
       }
 
-      #if DEBUG_SLOT_SELECTION_READABLE == 1
-
-      std::cout << "          === COMPARISONS ===" << std::endl;
-      for (auto & tv : typeVersions) {
-        std::cout << "          ( ";
-        for (auto & idx : indices) {
-          tv[idx].print(std::cout);
-          std::cout << " ; ";
+      if (printDebug) {
+        std::cout << "          === COMPARISONS ===" << std::endl;
+        for (auto & tv : typeVersions) {
+          std::cout << "          ( ";
+          for (auto & idx : indices) {
+            tv[idx].print(std::cout);
+            std::cout << " ; ";
+          }
+          std::cout << ")" << std::endl;
         }
-        std::cout << ")" << std::endl;
+        std::cout << "          Result: [ ";
+        for (auto & idx : indices) {
+          std::cout << idx << " ";
+        }
+        std::cout << "]" << std::endl;
+        std::cout << "          === === === === ===" << std::endl;
       }
-      std::cout << "          Result: [ ";
-      for (auto & idx : indices) {
-        std::cout << idx << " ";
-      }
-      std::cout << "]" << std::endl;
-      std::cout << "          === === === === ===" << std::endl;
-      #endif
       
       return true;
     }
 
     std::pair<bool, std::vector<int>> findSlotIn(size_t k) {
-      auto ints = getDiffSlots();
+      std::vector<unsigned int> ints = getDiffSlots();
+      std::sort(ints.begin(), ints.end(), 
+          [&](const unsigned int & idx1, const unsigned int & idx2) {
+            std::set<unsigned int> s1, s2;
+            for (auto & currVer: typeVersions) {
+              uint32_t c1 = *((uint32_t *) &currVer[idx1]);
+              uint32_t c2 = *((uint32_t *) &currVer[idx2]);
+              s1.insert(c1);
+              s2.insert(c2);
+            }
+            return s1.size() < s2.size();
+          });
 
-      if (ints.size() < k) {
+      std::cout << "      [SORTED] Slots in focus(" << ints.size() << "): [ ";
+      for (auto & ele : ints) {
+        std::cout << ele << " ";
+      }
+      std::cout << "]" << std::endl;
+
+
+      if (k == 1) {
+        for (auto & ele : ints) {
+          // std::cout << "Trying (" << ele << ")" << std::endl;
+          std::vector<int> indices;
+          indices.push_back(ele);
+          bool res = checkValidity(indices);
+          if (res) {
+            return std::pair<bool, std::vector<int>>(true, res);
+          }  
+        }
+
         return std::pair<bool, std::vector<int>>(false, std::vector<int>());
       }
 
-      do {
-
-        std::vector<int> indices;
-        #if DEBUG_SLOT_SELECTION == 1
-        std::cout << "Trying (";
-        #endif
-        for (int i = 0; i < k; ++i) {
-          indices.push_back(ints[i]);
-          #if DEBUG_SLOT_SELECTION == 1
-          std::cout << ints[i] << " ";
-          #endif
-        }
-        #if DEBUG_SLOT_SELECTION == 1
-        std::cout << ")\n";
-        #endif
-
-        bool res = checkValidity(indices);
-        if (res) {
-          return std::pair<bool, std::vector<int>>(true, res);
-        }
+      if (ints.size() < k) {
+        std::cout << "Early Quit for " << k << std::endl;
+        return std::pair<bool, std::vector<int>>(false, std::vector<int>());
       }
-      while(next_combination(ints.begin(),ints.begin() + k,ints.end()));
 
+      auto totalPossibilities = nChoosek(ints.size(), k);
+      std::cout << "  TOTAL POSSIBILITIES = " << totalPossibilities << std::endl;
+      bool TPM = true;
+      int count = 0;
+
+      Ticker tickTick(totalPossibilities);
+
+      // std::vector<std::thread> threadPool;
+
+      bool solnFound = false;
+      std::vector<int> solnRes;
+
+      std::vector<std::thread> threadPool;
+      threadPool.reserve(MAX_POOL_SIZE);
+      CombinationsIndexArray combos(ints.size(), k);
+      do {
+        
+        std::vector<int> indices;
+        for (int i = 0; i < combos.size(); i++) {
+          indices.push_back(ints[combos[i]]);
+        }
+
+        if (threadPool.size() > MAX_POOL_SIZE) {
+          for (auto & t : threadPool) {
+            t.join();
+          }
+          threadPool.clear();
+        }
+
+        threadPool.emplace_back([&](std::vector<int> idi) {
+          count++;
+          bool res = checkValidity(idi);
+          if (res) {
+            solnFound = true;
+            solnRes = idi;
+          }
+        }, indices);
+
+        if (count > TICK_TICK_LAP_COUNT) {
+          tickTick.lap(count);
+          count=0;
+        }
+
+        if (solnFound) {
+          break;
+        }
+      } while (combos.advance());
+
+      for (auto & t: threadPool) {
+        t.join();
+      }
+
+      if (solnFound) {
+        return std::pair<bool, std::vector<int>>(true, solnRes);
+      }
       return std::pair<bool, std::vector<int>>(false, std::vector<int>());
     }
 
@@ -251,6 +416,24 @@ class TVGraph {
         }
         std::cout << "}" << std::endl;
       }
+      #if PRING_CSV_DATA == 1
+
+      auto numVersions = typeVersions.size();
+      auto numSlots = typeVersions[0].size();
+      for (int slot = 0; slot < numSlots; slot++) {
+        std::cout << "SLOT_" << slot << ",";
+      }
+      std::cout << std::endl;
+      for (int ver = 0; ver < numVersions; ver++) {
+        auto currVer = typeVersions[ver];
+        for (int slot = 0; slot < numSlots; slot++) {
+          uint32_t curr = *((uint32_t *) &currVer[slot]);
+          std::cout << curr << ",";
+        }
+        std::cout << std::endl;
+      }
+
+      #endif
       if (typeVersions.size() > 1) {
         auto diffSlots = getDiffSlots();
         std::cout << "      Slots in focus(" << diffSlots.size() << "): [ ";
@@ -259,12 +442,16 @@ class TVGraph {
         }
         std::cout << "]" << std::endl;
         for (int i = 1; i <= MAX_SLOTS; i++) {
+          std::cout << "    Looking for " << i << " slot solution" << std::endl;
           auto result = findSlotIn(i);
           if (result.first) {
-            std::cout << "    Found result in " << i << " slots" << std::endl;
+            std::cout << "        Found result in " << i << " slots" << std::endl;
+            checkValidity(result.second, true);
             return;
           }
+          std::cout << "        No result in " << i << " slots" << std::endl;
         }
+        std::cout << "        No Result found (Tried until " << MAX_SLOTS << ")" << std::endl;
       }
     }
 
