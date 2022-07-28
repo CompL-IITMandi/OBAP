@@ -23,6 +23,8 @@ using namespace std::chrono;
 #define TICK_TICK_LAP_COUNT 1000000
 #define MAX_POOL_SIZE 10000
 
+#define DEBUG_PRINT_GENESIS 0
+
 typedef std::vector<rir::ObservedValues> TFVector;
 
 inline TFVector getFeedbackAsVector(SEXP cData) {
@@ -36,46 +38,6 @@ inline TFVector getFeedbackAsVector(SEXP cData) {
 
   return res;
 }
-
-
-// // https://stackoverflow.com/questions/5095407/all-combinations-of-k-elements-out-of-n
-// template <typename Iterator>
-// inline bool next_combination(const Iterator first, Iterator k, const Iterator last) {
-//    /* Credits: Thomas Draper */
-//    if ((first == last) || (first == k) || (last == k))
-//       return false;
-//    Iterator itr1 = first;
-//    Iterator itr2 = last;
-//    ++itr1;
-//    if (last == itr1)
-//       return false;
-//    itr1 = last;
-//    --itr1;
-//    itr1 = k;
-//    --itr2;
-//    while (first != itr1)
-//    {
-//       if (*--itr1 < *itr2)
-//       {
-//          Iterator j = k;
-//          while (!(*itr1 < *j)) ++j;
-//          std::iter_swap(itr1,j);
-//          ++itr1;
-//          ++j;
-//          itr2 = k;
-//          std::rotate(itr1,j,last);
-//          while (last != j)
-//          {
-//             ++j;
-//             ++itr2;
-//          }
-//          std::rotate(k,itr2,last);
-//          return true;
-//       }
-//    }
-//    std::rotate(first,k,last);
-//    return false;
-// }
 
 class CombinationsIndexArray {
     std::vector<int> index_array;
@@ -220,7 +182,7 @@ class TVGraph {
     }
 
     // Returns true if the given indexes uniquely differentiate between type versions
-    bool checkValidity(std::vector<int> & indices, bool printDebug=false) {
+    bool checkValidity(std::set<int> & indices, bool printDebug=false) {
       std::vector<std::vector<uint32_t>> res;
 
       #if DEBUG_SLOT_SELECTION == 1
@@ -303,103 +265,103 @@ class TVGraph {
       return true;
     }
 
-    std::pair<bool, std::vector<int>> findSlotIn(size_t k) {
-      std::vector<unsigned int> ints = getDiffSlots();
-      std::sort(ints.begin(), ints.end(), 
-          [&](const unsigned int & idx1, const unsigned int & idx2) {
-            std::set<unsigned int> s1, s2;
-            for (auto & currVer: typeVersions) {
-              uint32_t c1 = *((uint32_t *) &currVer[idx1]);
-              uint32_t c2 = *((uint32_t *) &currVer[idx2]);
-              s1.insert(c1);
-              s2.insert(c2);
-            }
-            return s1.size() < s2.size();
-          });
+    // std::pair<bool, std::vector<int>> findSlotIn(size_t k) {
+    //   std::vector<unsigned int> ints = getDiffSlots();
+    //   std::sort(ints.begin(), ints.end(), 
+    //       [&](const unsigned int & idx1, const unsigned int & idx2) {
+    //         std::set<unsigned int> s1, s2;
+    //         for (auto & currVer: typeVersions) {
+    //           uint32_t c1 = *((uint32_t *) &currVer[idx1]);
+    //           uint32_t c2 = *((uint32_t *) &currVer[idx2]);
+    //           s1.insert(c1);
+    //           s2.insert(c2);
+    //         }
+    //         return s1.size() < s2.size();
+    //       });
 
-      std::cout << "      [SORTED] Slots in focus(" << ints.size() << "): [ ";
-      for (auto & ele : ints) {
-        std::cout << ele << " ";
-      }
-      std::cout << "]" << std::endl;
+    //   std::cout << "      [SORTED] Slots in focus(" << ints.size() << "): [ ";
+    //   for (auto & ele : ints) {
+    //     std::cout << ele << " ";
+    //   }
+    //   std::cout << "]" << std::endl;
 
 
-      if (k == 1) {
-        for (auto & ele : ints) {
-          // std::cout << "Trying (" << ele << ")" << std::endl;
-          std::vector<int> indices;
-          indices.push_back(ele);
-          bool res = checkValidity(indices);
-          if (res) {
-            return std::pair<bool, std::vector<int>>(true, res);
-          }  
-        }
+    //   if (k == 1) {
+    //     for (auto & ele : ints) {
+    //       // std::cout << "Trying (" << ele << ")" << std::endl;
+    //       std::vector<int> indices;
+    //       indices.push_back(ele);
+    //       bool res = checkValidity(indices);
+    //       if (res) {
+    //         return std::pair<bool, std::vector<int>>(true, res);
+    //       }  
+    //     }
 
-        return std::pair<bool, std::vector<int>>(false, std::vector<int>());
-      }
+    //     return std::pair<bool, std::vector<int>>(false, std::vector<int>());
+    //   }
 
-      if (ints.size() < k) {
-        std::cout << "Early Quit for " << k << std::endl;
-        return std::pair<bool, std::vector<int>>(false, std::vector<int>());
-      }
+    //   if (ints.size() < k) {
+    //     std::cout << "Early Quit for " << k << std::endl;
+    //     return std::pair<bool, std::vector<int>>(false, std::vector<int>());
+    //   }
 
-      auto totalPossibilities = nChoosek(ints.size(), k);
-      std::cout << "  TOTAL POSSIBILITIES = " << totalPossibilities << std::endl;
-      bool TPM = true;
-      int count = 0;
+    //   auto totalPossibilities = nChoosek(ints.size(), k);
+    //   std::cout << "  TOTAL POSSIBILITIES = " << totalPossibilities << std::endl;
+    //   bool TPM = true;
+    //   int count = 0;
 
-      Ticker tickTick(totalPossibilities);
+    //   Ticker tickTick(totalPossibilities);
 
-      // std::vector<std::thread> threadPool;
+    //   // std::vector<std::thread> threadPool;
 
-      bool solnFound = false;
-      std::vector<int> solnRes;
+    //   bool solnFound = false;
+    //   std::vector<int> solnRes;
 
-      std::vector<std::thread> threadPool;
-      threadPool.reserve(MAX_POOL_SIZE);
-      CombinationsIndexArray combos(ints.size(), k);
-      do {
+    //   std::vector<std::thread> threadPool;
+    //   threadPool.reserve(MAX_POOL_SIZE);
+      // CombinationsIndexArray combos(ints.size(), k);
+      // do {
         
-        std::vector<int> indices;
-        for (int i = 0; i < combos.size(); i++) {
-          indices.push_back(ints[combos[i]]);
-        }
+      //   std::vector<int> indices;
+      //   for (int i = 0; i < combos.size(); i++) {
+      //     indices.push_back(ints[combos[i]]);
+      //   }
 
-        if (threadPool.size() > MAX_POOL_SIZE) {
-          for (auto & t : threadPool) {
-            t.join();
-          }
-          threadPool.clear();
-        }
+      //   if (threadPool.size() > MAX_POOL_SIZE) {
+      //     for (auto & t : threadPool) {
+      //       t.join();
+      //     }
+      //     threadPool.clear();
+      //   }
 
-        threadPool.emplace_back([&](std::vector<int> idi) {
-          count++;
-          bool res = checkValidity(idi);
-          if (res) {
-            solnFound = true;
-            solnRes = idi;
-          }
-        }, indices);
+      //   threadPool.emplace_back([&](std::vector<int> idi) {
+      //     count++;
+      //     bool res = checkValidity(idi);
+      //     if (res) {
+      //       solnFound = true;
+      //       solnRes = idi;
+      //     }
+      //   }, indices);
 
-        if (count > TICK_TICK_LAP_COUNT) {
-          tickTick.lap(count);
-          count=0;
-        }
+      //   if (count > TICK_TICK_LAP_COUNT) {
+      //     tickTick.lap(count);
+      //     count=0;
+      //   }
 
-        if (solnFound) {
-          break;
-        }
-      } while (combos.advance());
+      //   if (solnFound) {
+      //     break;
+      //   }
+      // } while (combos.advance());
 
-      for (auto & t: threadPool) {
-        t.join();
-      }
+    //   for (auto & t: threadPool) {
+    //     t.join();
+    //   }
 
-      if (solnFound) {
-        return std::pair<bool, std::vector<int>>(true, solnRes);
-      }
-      return std::pair<bool, std::vector<int>>(false, std::vector<int>());
-    }
+    //   if (solnFound) {
+    //     return std::pair<bool, std::vector<int>>(true, solnRes);
+    //   }
+    //   return std::pair<bool, std::vector<int>>(false, std::vector<int>());
+    // }
 
     void print() {
       unsigned int i = 0;
@@ -416,64 +378,367 @@ class TVGraph {
         }
         std::cout << "}" << std::endl;
       }
-      #if PRING_CSV_DATA == 1
-
-      auto numVersions = typeVersions.size();
-      auto numSlots = typeVersions[0].size();
-      for (int slot = 0; slot < numSlots; slot++) {
-        std::cout << "SLOT_" << slot << ",";
-      }
-      std::cout << std::endl;
-      for (int ver = 0; ver < numVersions; ver++) {
-        auto currVer = typeVersions[ver];
-        for (int slot = 0; slot < numSlots; slot++) {
-          uint32_t curr = *((uint32_t *) &currVer[slot]);
-          std::cout << curr << ",";
-        }
-        std::cout << std::endl;
-      }
-
-      #endif
       if (typeVersions.size() > 1) {
-        auto diffSlots = getDiffSlots();
-        std::cout << "      Slots in focus(" << diffSlots.size() << "): [ ";
-        for (auto & ele : diffSlots) {
-          std::cout << ele << " ";
-        }
-        std::cout << "]" << std::endl;
-        for (int i = 1; i <= MAX_SLOTS; i++) {
-          std::cout << "    Looking for " << i << " slot solution" << std::endl;
-          auto result = findSlotIn(i);
-          if (result.first) {
-            std::cout << "        Found result in " << i << " slots" << std::endl;
-            checkValidity(result.second, true);
-            return;
+        if (solve()) {
+          std::cout << "        (S) Solution: [ ";
+          for (auto & ele : finalSolution) {
+            std::cout << ele << " ";
           }
-          std::cout << "        No result in " << i << " slots" << std::endl;
+          std::cout << "]" << std::endl;
+          std::cout << " ==== ==== SOLUTION ROWS ==== ==== " << std::endl;
+          for (auto & tv : typeVersions) {
+            std::cout << "{ ";
+            for (auto & idx : finalSolution) {
+              tv[idx].print(std::cout);
+              std::cout << "; ";
+            }
+            std::cout << "}" << std::endl;
+          }
+          std::cout << "===================================" << std::endl;
+          assert (checkValidity(finalSolution));
+        } else {
+          std::cout << "        (S) No solution found in the allocated budget!" << std::endl;
         }
-        std::cout << "        No Result found (Tried until " << MAX_SLOTS << ")" << std::endl;
+
+
+        // for (int i = 1; i <= MAX_SLOTS; i++) {
+        //   std::cout << "    Looking for " << i << " slot solution" << std::endl;
+        //   auto result = findSlotIn(i);
+        //   if (result.first) {
+        //     std::cout << "        Found result in " << i << " slots" << std::endl;
+        //     checkValidity(result.second, true);
+        //     return;
+        //   }
+        //   std::cout << "        No result in " << i << " slots" << std::endl;
+        // }
+        // std::cout << "        No Result found (Tried until " << MAX_SLOTS << ")" << std::endl;
       }
     }
+
+    
 
   private:
 
-    std::vector<unsigned int> getDiffSlots() {
-      std::set<unsigned int> res;
-      auto numVersions = typeVersions.size();
-      auto numSlots = typeVersions[0].size();
-      for (int i = 0; i < numSlots; i++) {
-        uint32_t diffSlot1Val = *((uint32_t *) &typeVersions[0][i]);
-        for (int j = 1; j < numVersions; j++) {
-          uint32_t curr = *((uint32_t *) &typeVersions[j][i]);
-          if (curr != diffSlot1Val) {
-            res.insert(i);
-          }
+
+    typedef std::pair<int, int> WorklistElement;
+    typedef std::vector<std::pair<int, int>> Worklist;
+    typedef std::set<int> SolutionBucket;
+
+    int THRESHOLD_BUDGET = 10;
+    SolutionBucket finalSolution;
+
+    // 
+    // Solver Handle
+    // 
+    bool solve() {
+
+      Worklist genesis = getGenesisWorklist();
+      SolutionBucket genesisS;
+
+     
+
+      auto tSol = solveTrivialCases(genesis, genesisS);
+
+      if (tSol.first.size() == 0) {
+        finalSolution = tSol.second;
+        if (tSol.second.size() < THRESHOLD_BUDGET) {
+          std::cout << "        (*) Found solution trivially!" << std::endl;
+          return true;
+        } else {
+          std::cout << "        (*) Solution found but no solution in allocated budget exists!" << std::endl;
+          return false;
         }
       }
 
-      return std::vector<unsigned int>(res.begin(), res.end());
+      #if DEBUG_PRINT_GENESIS == 1
+      std::cout << "        Genesis Worklist: [ ";
+      for (auto & e : tSol.first) {
+        std::cout << "(" << e.first << "," << e.second << ") ";
+      }
+      std::cout << "]" << std::endl;
+
+      std::cout << "        Genesis Solution: [ ";
+      for (auto & ele : tSol.second) {
+        std::cout << ele << " ";
+      }
+      std::cout << "]" << std::endl;
+
+      #endif
+
+      return backtrackingSolver(tSol.first, tSol.second);
     }
-    
+
+    // 
+    // If two different solutions when applied to a worklist return the same solution, we consider them
+    // functionally equivalent
+    // 
+    SolutionBucket removeFunctionallyEquivalentSols(Worklist wl, SolutionBucket & considerationBucket) {
+      std::vector<Worklist> solutions;
+      SolutionBucket newBucket;
+
+      for (auto & s : considerationBucket) {
+        SolutionBucket tempSolBucket(considerationBucket.begin(), considerationBucket.end());
+        tempSolBucket.insert(s);
+        auto soln = solveTrivialCases(wl, tempSolBucket);
+
+        bool differentWorklist = false;
+
+        // Check if any of the previous solution matches with the current solution
+        for (auto & wl : solutions) {
+          // If they are same, they will have the same size aswell
+          if (wl.size() == soln.first.size()) {
+            for (int i = 0; i < wl.size(); i++) {
+              auto first = wl[i];
+              auto second = soln.first[i];
+              // If even one element is different they they are different
+              if (first.first != second.first || first.second != second.second) {
+                differentWorklist = true;break;
+              }
+            }
+          }
+          if (differentWorklist) {
+            break;
+          }
+        }
+
+        // If this solution may lead to a different worklist, then include it
+        if (differentWorklist) {
+          newBucket.insert(s);
+        }
+
+      }
+
+      return newBucket;
+    }
+
+    // 
+    // Recusive solving routine, recurse only if improvement exists otherwise backtrack
+    // 
+    bool backtrackingSolver(Worklist currWorklist, SolutionBucket currSol) {
+      if (currSol.size() > THRESHOLD_BUDGET) {
+        return false;
+      }
+
+      // Reduce worklist
+      auto so = solveTrivialCases(currWorklist, currSol);
+      currWorklist = so.first;
+      currSol = so.second;
+      
+      if (currWorklist.size() == 0) {
+        std::cout << "Solution Found" << std::endl;
+        finalSolution = currSol;
+        return true;
+      }
+
+      #if DEBUG_PRINT_GENESIS == 1
+      std::cout << "        BTWL: [ ";
+      for (auto & e : currWorklist) {
+        std::cout << "(" << e.first << "," << e.second << ") ";
+      }
+      std::cout << "]" << std::endl;
+
+      std::cout << "        CSOL: [ ";
+      for (auto & ele : currSol) {
+        std::cout << ele << " ";
+      }
+      std::cout << "]" << std::endl;
+
+      #endif
+
+      // SMART STAGE
+      for (WorklistElement & ele : currWorklist) {
+        // Our aim is to minimize the diffSet.
+        // For a given worklist element, diffset gives us a list of possible solutions
+        // we want to only try the solutions that will actually improve things
+
+        SolutionBucket diffSet = getDiffSet(ele);
+
+        // #if DEBUG_PRINT_GENESIS == 1
+        // std::cout << "          DIFFSET   : [ ";
+        //     for (auto & ele : diffSet) {
+        //       std::cout << ele << " ";
+        //     }
+        //     std::cout << "]" << std::endl;
+        // #endif
+
+        // 1. Remove existing solutions from potential solutions
+        for (auto & s : currSol) {
+          if (diffSet.find(s) != diffSet.end()) {
+            diffSet.erase(s);
+          }
+        }
+
+        // #if DEBUG_PRINT_GENESIS == 1
+        // std::cout << "          DIFFSET(R): [ ";
+        //     for (auto & ele : diffSet) {
+        //       std::cout << ele << " ";
+        //     }
+        //     std::cout << "]" << std::endl;
+        // #endif
+
+        SolutionBucket considerationSubsetCols;
+        // 2. Get rid of functionally useless solutions
+        for (auto & fele : diffSet) {
+          SolutionBucket tempSolBucket(currSol.begin(), currSol.end());
+          
+          // Add this potential solution to the existing solution set
+          tempSolBucket.insert(fele);
+
+          auto soln = solveTrivialCases(currWorklist, tempSolBucket);
+          
+          // Worklist empty, If yes check and return final res
+          if (soln.first.size() == 0) {
+            finalSolution = tempSolBucket;
+            return backtrackingSolver(soln.first, soln.second);
+          }
+          // If the worklist with the newly added solution is smaller than the existing worklist, we keep it
+          if (soln.first.size() < currWorklist.size()) {
+            considerationSubsetCols.insert(fele);
+          }
+        }
+
+        // #if DEBUG_PRINT_GENESIS == 1
+        // std::cout << "          CONSIDE  : [ ";
+        //     for (auto & ele : considerationSubsetCols) {
+        //       std::cout << ele << " ";
+        //     }
+        //     std::cout << "]" << std::endl;
+        // #endif
+
+        // // 2. Eliminate functionally identical solutions
+        // SolutionBucket finalConsiderationBucket = removeFunctionallyEquivalentSols(currWorklist, considerationSubsetCols);
+        
+        // 3. Iterate over all combinations of the reduced solution set
+        std::vector<int> ints(considerationSubsetCols.begin(), considerationSubsetCols.end());
+
+        for (int j = 1; j < ints.size(); j ++) {
+          if ((j + currSol.size()) > THRESHOLD_BUDGET) break;
+
+          CombinationsIndexArray combos(ints.size(), j);
+          do {
+            SolutionBucket tempSolBucket(currSol.begin(), currSol.end());
+            for (int i = 0; i < combos.size(); i++) {
+              tempSolBucket.insert(ints[combos[i]]);
+            }
+
+            #if DEBUG_PRINT_GENESIS == 1
+            std::cout << "            CONSIDE(R): [ ";
+            for (auto & ele : tempSolBucket) {
+              std::cout << ele << " ";
+            }
+            std::cout << "]" << std::endl << std::endl;
+            #endif
+
+
+            bool res = backtrackingSolver(currWorklist, tempSolBucket);
+
+            if (res) {
+              return true;
+            }
+
+          } while (combos.advance());
+
+        }
+
+
+      }
+
+      return false;
+
+    }
+
+    //
+    // If the solution set contains any of the diff-set element, then it is already solved
+    // 
+    bool checkIfEleAlreadySolved(WorklistElement & ele, SolutionBucket & bucket) {
+      std::set<int> diffSet = getDiffSet(ele);
+      for (auto & s : bucket) {
+        for (auto & d : diffSet) {
+          if (s == d) return true;
+        }
+      }
+
+      return false;
+    }
+
+    //
+    // Solves the trivial cases, reduces worklist if either condition is met
+    //  1: Diffset of ele already belongs to the solutionBucket
+    //  2: The diff set size is one
+    // and returns a new worklist and solutionBucket
+    // 
+
+    std::pair<Worklist, SolutionBucket> solveTrivialCases(Worklist existingWorklist, SolutionBucket existingSolutionBucket) {
+      Worklist newWorklist;
+      SolutionBucket newSolutionBucket(existingSolutionBucket.begin(), existingSolutionBucket.end());
+      Worklist tempWorklist;
+
+      for (WorklistElement & ele : existingWorklist) {
+        auto diffSet = getDiffSet(ele);
+        if (diffSet.size() == 1) {
+          auto first = *diffSet.begin();
+          newSolutionBucket.insert(first);
+        } else {
+          tempWorklist.push_back(ele);
+        }
+      }
+
+      for (WorklistElement & ele : tempWorklist) {
+        if (checkIfEleAlreadySolved(ele, newSolutionBucket) == false) {
+          newWorklist.push_back(ele);
+        }
+      }
+
+      return std::pair<Worklist, SolutionBucket>(newWorklist, newSolutionBucket);
+    }
+
+    // 
+    // Returns a set of indices where the two Type Feedback vectors differ at
+    // We know that diff cannot possibly contain duplicates
+    // 
+    std::set<int> getDiffSet(std::pair<int, int> eles) {
+      auto first = typeVersions[eles.first];
+      auto second = typeVersions[eles.second];
+
+      std::set<int> diffSet;
+
+      assert(first.size() == second.size());
+      for (int i = 0; i < first.size(); i++) {
+        uint32_t v1 = *((uint32_t *)(&first[i]));
+        uint32_t v2 = *((uint32_t *)(&second[i]));
+
+        if (v1 != v2) {
+          diffSet.insert(i);
+        }
+      }
+
+      return diffSet;
+    }
+
+    // 
+    // Returns the genesis worklist, it returns n choose 2 over the list of Type Feedback versions
+    // We expect this to be efficient enough as even something like 100 type versions has a manageable
+    // result of 4952
+    // 
+    Worklist getGenesisWorklist() {
+      Worklist res;
+
+      // N choose 2
+      CombinationsIndexArray combos(typeVersions.size(), 2);
+      do {
+        std::vector<int> indices;
+        for (int i = 0; i < combos.size(); i++) {
+          indices.push_back(combos[i]);
+        }
+
+        assert(indices.size() == 2);
+        res.push_back(std::pair<int, int>(indices[0], indices[1]));
+
+      } while (combos.advance());
+
+      return res;
+
+    }
 
     bool TFVEquals(TFVector & v1, TFVector & v2) {
       assert(v1.size() == v2.size());
