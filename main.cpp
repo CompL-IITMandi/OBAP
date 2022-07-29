@@ -1,24 +1,7 @@
-#include <iostream>
-#include <stdlib.h>
-#include <functional>
 #include <fstream>
-#include <algorithm>
-#include <set>
-#include <iterator>
+// Include fstream before Rinternals.h, otherwise a macro redef error might happen
+#include "Rinternals.h"
 
-#include "llvm/ExecutionEngine/Orc/ThreadSafeModule.h"
-#include "llvm/Bitcode/BitcodeReader.h"
-#include "llvm/Support/raw_ostream.h"
-
-#include "runtime/Context.h"
-#include "opt/ModuleManager.h"
-#include "utils/hasse.h"
-
-#include "utils/RshBuiltinsMap.h"
-#include "utils/iter.h"
-#include "utils/ContextAnalysisComparison.h"
-
-#include "utils/serializerData.h"
 #include "Rembedded.h"
 #include "dirent.h"
 #include <unistd.h>
@@ -26,32 +9,28 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#include "Rinternals.h"
 
-std::unordered_map<std::string, unsigned> RshBuiltinWeights::weightMap;
+#include "utils/serializerData.h"
+#include "utils/Debug.h"
+#include "utils/SerializedDataProcessor.h"
+#include "utils/RshBuiltinsMap.h"
+#include "utils/UMap.h"
+
+#include <iostream>
+#include <stdlib.h>
+#include <functional>
+#include <sstream>
+
 
 static void iterateOverMetadatasInDirectory(const char * folderPath) {
-  static SEXP maskSym = Rf_install("mask");
+  std::cout << "iterateOverMetadatasInDirectory" << std::endl;
   DIR *dir;
   struct dirent *ent;
-  int i = 0;
-  unsigned funCount = 0;
-  unsigned masked = 0;
-  unsigned removed = 0;
-  unsigned totalContexts = 0;
-
-  unsigned strictComparisons = 0;
-  unsigned roughEQComparisons = 0;
-  unsigned roughNEQComparisons = 0;
-
-  std::ofstream maskDataStream(std::string(folderPath) + "/maskData");
   
   if ((dir = opendir(folderPath)) != NULL) {
     while ((ent = readdir(dir)) != NULL) {
       std::string fName = ent->d_name;
       if (fName.find(".meta") != std::string::npos) {
-        // std::cout << "Processing " << fName << std::endl;
-        i++;
 
         std::stringstream metadataPath;
         metadataPath << folderPath << "/" << fName;
@@ -62,13 +41,12 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
         if (!reader) {
           for (int i = 0; i < 10; i++) {
             sleep(1);
-            // std::cout << "waiting to open: " << metadataPath.str() << std::endl;
             reader = fopen(metadataPath.str().c_str(),"r");
             if (reader) break;
           }
 
           if (!reader) {
-            std::cout << "unable to open " << metadataPath.str() << std::endl;
+            std::cerr << "unable to open " << metadataPath.str() << std::endl;
             Rf_error("unable to open file!");
             continue;
           }
@@ -81,103 +59,26 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
         SEXP serDataContainer;
         PROTECT(serDataContainer = R_Unserialize(&inputStream));
 
+        printSpace(0);
+        std::cout << "Processing: " << fName << std::endl;
+        printSpace(2);
+        std::cout << "FunctionName: " << CHAR(PRINTNAME(rir::serializerData::getName(serDataContainer))) << std::endl;
+
         fclose(reader);
 
         // Get serialized metadata
         REnvHandler offsetMapHandler(rir::serializerData::getBitcodeMap(serDataContainer));
 
         offsetMapHandler.iterate([&] (SEXP offsetIndex, SEXP contextMap) {
-          rir::Context mask;
-          rir::Context oldMask;
-          REnvHandler contextMapHandler(contextMap);
-          if (SEXP existingMaskContainer = contextMapHandler.get(maskSym)){
-            mask = oldMask = rir::Context(*((unsigned long *) DATAPTR(existingMaskContainer)));
-          }
-
-          maskDataStream << CHAR(PRINTNAME(rir::serializerData::getHast(serDataContainer))) << "_" << CHAR(PRINTNAME(offsetIndex)) << " ";
-
-
-          // We are now processing a function, non zero index indicates an inner function
-          std::set<unsigned long> toRemove;
+          printSpace(4);
+          std::cout << "At offset " << CHAR(PRINTNAME(offsetIndex)) << std::endl;
 
           std::stringstream pathPrefix;
           pathPrefix << folderPath << "/" << CHAR(PRINTNAME(rir::serializerData::getHast(serDataContainer))) << "_" << CHAR(PRINTNAME(offsetIndex)) << "_";
 
-          
-
-          doAnalysisOverContexts(
-            pathPrefix.str(),
-            contextMap,
-            [&] (
-              std::vector<rir::Context> & contextsVec, 
-              std::unordered_map<rir::Context, unsigned> & weightAnalysis, 
-              std::unordered_map<rir::Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > & simpleArgumentAnalysis,
-              std::unordered_map<rir::Context, std::vector<std::set<std::string>>> & funCallBFData
-            )  {
-
-              if (contextsVec.size() > 1) {
-                funCount++;
-                totalContexts += contextsVec.size();
-              }
-
-              compareContexts(contextsVec, [&] (rir::Context & c1, rir::Context & c2, const ComparisonType & t) {
-                // C1 -- Less specialized
-                // C2 -- More specialized
-                ContextAnalysisComparison cac(c1, c2, t);
-                auto currMask = cac.getMask(weightAnalysis, simpleArgumentAnalysis, funCallBFData);
-                
-
-
-                if (currMask.toI() > 0) {
-                  if (t == ComparisonType::STRICT) {
-                    strictComparisons++;
-                  } else if (t == ComparisonType::ROUGH_EQ) {
-                    roughEQComparisons++;
-                  } else if (t == ComparisonType::ROUGH_NEQ) {
-                    roughNEQComparisons++;
-                  }
-                  if (cac.safeToRemoveContext(currMask)) {
-                    toRemove.insert(c2.toI());
-                  }
-                }
-
-                mask = mask + currMask;
-              });
-            }
-          );
-
-          removed += toRemove.size();
-
-          
-          unsigned numContexts = contextMapHandler.size();
-          if (contextMapHandler.get(maskSym)){
-            numContexts--;
-          }
-
-          // std::cout << "  [" << CHAR(PRINTNAME(offsetIndex)) << "] (" << numContexts << ")" << std::endl;
-          
-          maskDataStream << mask.toI() << " ";
-          if (oldMask != mask) {
-            masked++;
-            // std::cout << "    [NEW MASK]: " << mask << std::endl;
-            // std::cout << "    [OLD MASK]: " << oldMask << std::endl;
-          } else {
-            // if (oldMask.toI() != 0)
-            // std::cout << "    [MASK]: " << oldMask << std::endl;
-          }
-          
-
-          // std::cout << "    [DEPRECATED CONTEXTS]: [";
-
-          for (auto & ele : toRemove) {
-            // std::cout << ele;
-            maskDataStream << ele << " ";
-            
-          }
-          // std::cout << "]" << std::endl;
-
-          maskDataStream << std::endl;
-          
+          SerializedDataProcessor p(contextMap, pathPrefix.str());
+          p.init();
+          p.print(6);
 
         });
 
@@ -208,25 +109,9 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
       }
     }
   } else {
-    std::cout << "\"" << folderPath << "\" has no metas" << std::endl;
+    std::cerr << "\"" << folderPath << "\" has no metas, nothing to process" << std::endl;
+    exit(EXIT_FAILURE);
   }
-
-  maskDataStream.close();
-
-  std::cout << "=== SUMMARY ===" << std::endl;
-  std::cout << "Strict Comparisons: " << strictComparisons << std::endl;
-  std::cout << "Rough EQ Comparisons: " << roughEQComparisons << std::endl;
-  std::cout << "Rough NEQ Comparisons: " << roughNEQComparisons << std::endl;
-  // std::cout << "Diff zero miss Comparisons: " << diffComparisonsMissZero << std::endl;
-  // std::cout << "Diff same miss Comparisons: " << diffComparisonsMissSame << std::endl;
-  // std::cout << "Diff diff miss Comparisons: " << diffComparisonsMissDiff << std::endl;
-
-  std::cout << "Total functions processed: " << funCount << std::endl;
-  std::cout << "Functions masked: " << masked << std::endl;
-  std::cout << "Bitcodes processed for functions (where contexts > 1): " << totalContexts << std::endl;
-  std::cout << "Bitcodes removed: " << removed << std::endl;
-  std::cout << "Bitcodes folder: " << folderPath << std::endl;
-
 }
 
 // https://stackoverflow.com/questions/46728680/how-to-temporarily-suppress-output-from-printf
@@ -250,7 +135,6 @@ void resume_stdout(int fd) {
 
 
 int main(int argc, char** argv) {
-
   bool rHomeSet = getenv("R_HOME") ? true : false;
 
   if (!rHomeSet) {
@@ -277,7 +161,6 @@ int main(int argc, char** argv) {
   std::cerr << "R initialization successful!" << std::endl;
 
   auto bitcodesFolder = argv[1];
-  GlobalData::bitcodesFolder = bitcodesFolder;
 
   RshBuiltinWeights::init();
 

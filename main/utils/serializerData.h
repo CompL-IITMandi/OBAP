@@ -1,9 +1,13 @@
 #pragma once
 
+#include "Rinternals.h"
+
+#include <sstream>
 #include "utils/UMap.h"
 #include "utils/FunctionSignature.h"
 #include "runtime/TypeFeedback.h"
 #include "runtime/Context.h"
+
 
 #define PRINT_EXTENDED_CHILDREN 0
 

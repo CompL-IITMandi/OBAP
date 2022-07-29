@@ -1,0 +1,728 @@
+#pragma once
+
+#include "utils/serializerData.h"
+#include "utils/Debug.h"
+#include <algorithm>
+#include <thread>
+#include <vector>
+#include <unordered_map>
+#include <chrono>
+using namespace std::chrono;
+
+// Possible values are 0, 1, 2
+#define DEBUG_BACKTRACKING_SOLVER 0
+#define DEBUG_IMP_CHECKPOINTS 1
+
+
+// 
+// Helper Classes
+// ====================================================================================
+// 
+
+// Source: https://stackoverflow.com/questions/5076695/how-can-i-iterate-through-every-possible-combination-of-n-playing-cards
+class CombinationsIndexArray {
+  std::vector<int> index_array;
+  int last_index;
+  public:
+  CombinationsIndexArray(int number_of_things_to_choose_from, int number_of_things_to_choose_in_one_combination) {
+    last_index = number_of_things_to_choose_from - 1;
+    for (int i = 0; i < number_of_things_to_choose_in_one_combination; i++) {
+      index_array.push_back(i);
+    }
+  }
+  int operator[](int i) {
+      return index_array[i];
+  }
+  int size() {
+      return index_array.size();
+  }
+  bool advance() {
+    int i = index_array.size() - 1;
+    if (index_array[i] < last_index) {
+      index_array[i]++;
+      return true;
+    } else {
+      while (i > 0 && index_array[i-1] == index_array[i]-1) {
+        i--;
+      }
+      if (i == 0) {
+        return false;
+      } else {
+        index_array[i-1]++;
+        while (i < (int)index_array.size()) {
+          index_array[i] = index_array[i-1]+1;
+          i++;
+        }
+        return true;
+      }
+    }
+  }
+};
+
+class Ticker {
+  public:
+    Ticker(unsigned int totalCycles) : total(totalCycles), remainingCycles(totalCycles) {
+      start = std::chrono::high_resolution_clock::now();
+    }
+
+    void lap(unsigned int completedCycles) {
+      auto end = std::chrono::high_resolution_clock::now();
+      auto duration = duration_cast<milliseconds>(end - start);
+      remainingCycles = remainingCycles - completedCycles;
+      double timeForOneCycleInMs = (double) duration.count() / completedCycles;
+      averageTimePerThread += timeForOneCycleInMs;
+      checks++;
+      double remainingTotalTimeInMs = timeForOneCycleInMs * remainingCycles;
+      auto completedPercent = (total - remainingCycles) / (double) total;
+      std::cout << "=== TICK TICK ===" << std::endl;
+      std::cout << "Done(" << (total - remainingCycles) << "/" << total << ")" << std::endl; 
+      std::cout << "Completed: " << (completedPercent*100) << "%" << std::endl;       
+      std::cout << "Remaining time estimate: " << (remainingTotalTimeInMs/(1000 * 60)) << " minutes" << std::endl;
+      std::cout << "=================" << std::endl;
+
+      start = std::chrono::high_resolution_clock::now();
+    }
+
+    unsigned int getAverageThreadTime() {
+      if (checks == 0) return 0;
+      return (unsigned int) (averageTimePerThread / checks);
+    }
+
+  private:
+    double averageTimePerThread = 0;
+    int checks = 0;
+    std::chrono::high_resolution_clock::time_point start;
+    unsigned int total, remainingCycles;
+
+};
+
+class TVNode {
+  public:
+    void addNode(SEXP cData) {
+      redundantNodes++;
+
+      auto rData = rir::contextData::getReqMapAsVector(cData);
+      std::vector<std::string> reqMapVec;
+
+      for (int i = 0; i < Rf_length(rData); i++) {
+        SEXP ele = VECTOR_ELT(rData, i);
+        reqMapVec.push_back(CHAR(PRINTNAME(ele)));
+      }
+
+      std::sort(reqMapVec.begin(), reqMapVec.end());
+
+      std::stringstream ss;
+
+      for (auto & e : reqMapVec) {
+        ss << e << ";";
+      }
+
+      diversions[ss.str()].push_back(cData);
+    }
+
+    int size() {
+      return redundantNodes;
+    }
+
+    void print(unsigned int space = 0) {
+      printSpace(space);
+      std::cout << "=== TVNODE ===" << std::endl;
+      
+      printSpace(space);
+      std::cout << "Diversions: " << diversions.size() << std::endl;
+
+      if (diversions.size() > 1) {
+        printSpace(space + 2);
+        std::cout << "Non Trivial Diversions" << std::endl;
+        for (auto & e : diversions) {
+          printSpace(space + 4);
+          std::cout << "" << e.first << std::endl;
+        }
+      } else {
+        printSpace(space + 2);
+        std::cout << "Trivial Diversions" << std::endl;
+      }
+      printSpace(space);
+      std::cout << "==============" << std::endl;
+    }
+  private:
+    std::unordered_map<std::string, std::vector<SEXP>> diversions;
+    unsigned int redundantNodes = 0;
+
+    
+};
+
+class TVGraph {
+    static unsigned int MAX_SLOTS_SIZE;
+
+  public:
+
+    unsigned int SLOT_FINDER_BUDGET = 10;
+
+    // 
+    // Expects a vector of contextData SEXP
+    // 
+    TVGraph(std::vector<SEXP> & cDataVec) {
+      for (auto & cData : cDataVec) {
+        addNode(cData);
+      }
+    }
+
+    bool init() {
+      bool slotFound = false;
+      if (typeVersions.size() > 1) {
+        slotFound = solve();
+        assert (checkValidity(finalSolution));
+
+        auto solSize = finalSolution.size();
+
+        if (solSize > MAX_SLOTS_SIZE) {
+          MAX_SLOTS_SIZE = solSize;
+        }
+
+        #if DEBUG_IMP_CHECKPOINTS == 1
+        std::cout << "    Type Slots(" << finalSolution.size() << "): [ ";
+        for (auto & ele : finalSolution) {
+          std::cout << ele << " ";
+        }
+        std::cout << "]" << std::endl;
+
+        std::cout << " ==== ==== SOLUTION ROWS ==== ==== " << std::endl;
+        for (auto & tv : typeVersions) {
+          std::cout << "{ ";
+          for (auto & idx : finalSolution) {
+            tv[idx].print(std::cout);
+            std::cout << "; ";
+          }
+          std::cout << "}" << std::endl;
+        }
+        std::cout << "===================================" << std::endl;
+        #endif
+      } else {
+        slotFound = true;
+      } 
+       
+      return slotFound;
+    }
+    
+    void print(unsigned int space = 0) {
+      assert(typeVersions.size() == nodes.size());
+      printSpace(space);
+      std::cout << "Found " << typeVersions.size() << " Type Versions" << std::endl;
+      for (unsigned int i = 0; i < typeVersions.size(); i++) {
+        printSpace(space + 2);
+        std::cout << "Type version " << i << " (" << nodes[i].size() << " redundant nodes) " << ": {";
+        // int k = 0;
+        // for (auto & e : ele) {
+        //   std::cout << " (" << k++ << ")[";
+        //   e.print(std::cout);
+        //   std::cout << "]";
+        // }
+        std::cout << "}" << std::endl;
+        nodes[i].print(space + 4);
+      }
+    }
+
+    static void printStats(unsigned int space = 0) {
+      printSpace(space);
+      std::cout << "=== TVGraph Stats ===" << std::endl;
+      
+      printSpace(space);
+      std::cout << "Max slots needed: " << MAX_SLOTS_SIZE << std::endl;
+      
+      printSpace(space);
+      std::cout << "=====================" << std::endl;
+    }
+
+  private:    
+    typedef std::vector<rir::ObservedValues> TFVector;
+    typedef std::pair<int, int> WorklistElement;
+    typedef std::vector<std::pair<int, int>> Worklist;
+    typedef std::set<int> SolutionBucket;
+
+    SolutionBucket finalSolution;
+    std::vector<TFVector> typeVersions;
+    std::unordered_map<unsigned int, TVNode> nodes;
+
+    std::unordered_map<std::string, bool> memo;
+
+    // 
+    // Helper methods
+    // ====================================================================================
+    // 
+
+    // 
+    // Takes a contextData SEXP and extracts its type feedback vector. If the type feedback 
+    // vector already exists then adds the current node as a redundant node to it, otherwise
+    // creates a new entry for the current node
+    // 
+    void addNode(SEXP cData) {
+      TFVector currTFVector = getFeedbackAsVector(cData);
+      
+      // If curr exists then add to an existing node
+      unsigned int i = 0;
+      for (; i < typeVersions.size(); i++) {
+        if (TFVEquals(typeVersions[i], currTFVector)) {
+          nodes[i].addNode(cData);
+          return;
+        }
+      }
+
+      // If this is a new version, add new
+      typeVersions.push_back(currTFVector);
+      size_t idx = typeVersions.size() - 1;
+      nodes[idx].addNode(cData);
+    }
+
+
+    // 
+    // Takes a contextData SEXP object and returns std::vector<rir::ObservedValues>
+    // 
+    inline TFVector getFeedbackAsVector(SEXP cData) {
+      TFVector res;
+
+      SEXP tfContainer = rir::contextData::getTF(cData);
+      rir::ObservedValues * tmp = (rir::ObservedValues *) DATAPTR(tfContainer);
+      for (int i = 0; i < Rf_length(tfContainer) / (int) sizeof(rir::ObservedValues); i++) {
+          res.push_back(tmp[i]);      
+      }
+
+      return res;
+    }
+
+    // 
+    // Takes a rir::ObservedValue and returns equivalent uint32_t
+    // 
+    uint32_t getFeedbackAsUint(const rir::ObservedValues & v) {
+      return *((uint32_t *) &v);
+    }
+
+    // 
+    // Returns true if the given TFVectors are the same 
+    // 
+    bool TFVEquals(TFVector & v1, TFVector & v2) {
+      assert(v1.size() == v2.size());
+
+      for (unsigned int i = 0; i < v1.size(); i++) {
+        uint32_t t1 = getFeedbackAsUint(v1[i]);
+        uint32_t t2 = getFeedbackAsUint(v2[i]);
+        if (t1 != t2) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    // 
+    // For validating the results that the solver returns, takes a SolutionBucket(std::set<int>) and returns a bool
+    // 
+    bool checkValidity(SolutionBucket & indices, bool printDebug=false) {
+      std::vector<std::vector<uint32_t>> res;
+
+      for (auto & tv : typeVersions) {
+        std::vector<uint32_t> ele;
+        for (auto & idx : indices) {
+          uint32_t curr = getFeedbackAsUint(tv[idx]);
+          ele.push_back(curr);
+        }
+        res.push_back(ele);
+      }
+
+      // Check if duplicate elements exist
+      for (unsigned int m = 0; m < res.size(); m++) {
+        auto first = res[m];
+
+        for (unsigned int i = 0; i < res.size(); i++) {
+          if (i == m) continue;
+          auto curr = res[i];
+
+          bool match = true;
+
+          for (unsigned int j = 0; j < first.size(); j++) {
+            if (first[j] != curr[j]) {
+              match = false;
+            }
+          }
+
+          
+          // If match is true, then return false as we cannot uniquely identify using this indices subset
+          if (match) {
+            return false;
+          }
+        }
+      }
+
+      if (printDebug) {
+        std::cout << "          === COMPARISONS ===" << std::endl;
+        for (auto & tv : typeVersions) {
+          std::cout << "          ( ";
+          for (auto & idx : indices) {
+            tv[idx].print(std::cout);
+            std::cout << " ; ";
+          }
+          std::cout << ")" << std::endl;
+        }
+        std::cout << "          Result: [ ";
+        for (auto & idx : indices) {
+          std::cout << idx << " ";
+        }
+        std::cout << "]" << std::endl;
+        std::cout << "          === === === === ===" << std::endl;
+      }
+      
+      return true;
+    }
+
+    // 
+    // Better Slot Finder implementation
+    // ====================================================================================
+    // 
+
+    // 
+    // Solver Handle
+    // 
+    bool solve() {
+      Worklist genesis = getGenesisWorklist();
+      SolutionBucket genesisS;
+
+      auto tSol = solveTrivialCases(genesis, genesisS);
+
+      if (tSol.first.size() == 0) {
+        finalSolution = tSol.second;
+        if (tSol.second.size() < SLOT_FINDER_BUDGET) {
+          #if DEBUG_BACKTRACKING_SOLVER == 1
+          std::cout << "        (*) Found solution trivially!" << std::endl;
+          #endif
+          return true;
+        } else {
+          #if DEBUG_BACKTRACKING_SOLVER == 1
+          std::cout << "        (*) Solution found but no solution in allocated budget exists!" << std::endl;
+          #endif
+          return false;
+        }
+      }
+
+      #if DEBUG_BACKTRACKING_SOLVER == 1
+      std::cout << "        Genesis Worklist: [ ";
+      for (auto & e : tSol.first) {
+        std::cout << "(" << e.first << "," << e.second << ") ";
+      }
+      std::cout << "]" << std::endl;
+
+      std::cout << "        Genesis Solution: [ ";
+      for (auto & ele : tSol.second) {
+        std::cout << ele << " ";
+      }
+      std::cout << "]" << std::endl;
+
+      #endif
+
+      return backtrackingSolver(tSol.first, tSol.second);
+    }
+
+    // 
+    // Recusive solving routine, recurse only if improvement exists otherwise backtrack
+    // 
+    bool backtrackingSolver(Worklist currWorklist, SolutionBucket currSol) {
+      std::stringstream key;
+      for (auto & e : currWorklist) {
+        key << e.first << "," << e.second << ",";
+      }
+      key << "_";
+      for (auto & e : currSol) {
+        key << e;
+      }
+
+      if (memo.find(key.str()) != memo.end()) {
+        return memo[key.str()];
+      }
+
+      if (currSol.size() > SLOT_FINDER_BUDGET) {
+        memo[key.str()] = false;
+        return false;
+      }
+
+      // Reduce worklist
+      auto so = solveTrivialCases(currWorklist, currSol);
+      currWorklist = so.first;
+      currSol = so.second;
+      
+      if (currWorklist.size() == 0) {
+        finalSolution = currSol;
+        memo[key.str()] = true;
+        return true;
+      }
+
+      #if DEBUG_BACKTRACKING_SOLVER > 0
+      std::cout << "        CURRENT_WORKLIST: [ ";
+      for (auto & e : currWorklist) {
+        std::cout << "(" << e.first << "," << e.second << ") ";
+      }
+      std::cout << "]" << std::endl;
+
+      std::cout << "        CURRENT_SOLUTION: [ ";
+      for (auto & ele : currSol) {
+        std::cout << ele << " ";
+      }
+      std::cout << "]" << std::endl;
+      #endif
+
+      // SMART STAGE
+      for (WorklistElement & ele : currWorklist) {
+        // Our aim is to minimize the diffSet.
+        // For a given worklist element, diffset gives us a list of possible solutions
+        // we want to only try the solutions that will actually improve things
+
+        SolutionBucket diffSet = getDiffSet(ele);
+
+        #if DEBUG_BACKTRACKING_SOLVER > 1
+        std::cout << "          NEXT_DIFFSET_STAGE_0: [ ";
+        for (auto & ele : diffSet) {
+          std::cout << ele << " ";
+        }
+        std::cout << "]" << std::endl;
+        #endif
+
+        // 1. Remove existing solutions from potential solutions
+        for (auto & s : currSol) {
+          if (diffSet.find(s) != diffSet.end()) {
+            diffSet.erase(s);
+          }
+        }
+
+        #if DEBUG_BACKTRACKING_SOLVER > 1
+        std::cout << "          NEXT_DIFFSET_STAGE_1: [ ";
+        for (auto & ele : diffSet) {
+          std::cout << ele << " ";
+        }
+        std::cout << "]" << std::endl;
+        #endif
+
+        SolutionBucket considerationSubsetCols;
+        // 2. Get rid of functionally useless solutions
+        for (auto & fele : diffSet) {
+          SolutionBucket tempSolBucket(currSol.begin(), currSol.end());
+          
+          // Add this potential solution to the existing solution set
+          tempSolBucket.insert(fele);
+
+          auto soln = solveTrivialCases(currWorklist, tempSolBucket);
+          
+          // Worklist empty, If yes check and return final res
+          if (soln.first.size() == 0) {
+            finalSolution = tempSolBucket;
+            
+            
+            auto res = backtrackingSolver(soln.first, soln.second);
+            memo[key.str()] = res;
+            return res;
+          }
+          // If the worklist with the newly added solution is smaller than the existing worklist, we keep it
+          if (soln.first.size() < currWorklist.size()) {
+            considerationSubsetCols.insert(fele);
+          }
+        }
+
+        #if DEBUG_BACKTRACKING_SOLVER > 1
+        std::cout << "          NEXT_DIFFSET_STAGE_2: [ ";
+        for (auto & ele : considerationSubsetCols) {
+          std::cout << ele << " ";
+        }
+        std::cout << "]" << std::endl;
+        #endif
+
+        // // TODO: Fix this reduction stage in future if needed, other stages handles all cases effortlessly already.
+        // // 2. Eliminate functionally identical solutions
+        // SolutionBucket finalConsiderationBucket = removeFunctionallyEquivalentSols(currWorklist, considerationSubsetCols);
+
+
+        // #if DEBUG_BACKTRACKING_SOLVER > 1
+        // std::cout << "          NEXT_DIFFSET_STAGE_3: [ ";
+        // for (auto & ele : finalConsiderationBucket) {
+        //   std::cout << ele << " ";
+        // }
+        // std::cout << "]" << std::endl;
+        // #endif
+        
+        // 3. Iterate over all combinations of the reduced solution set
+        std::vector<int> ints(considerationSubsetCols.begin(), considerationSubsetCols.end());
+
+        for (unsigned int j = 1; j < ints.size(); j ++) {
+          if ((j + currSol.size()) > SLOT_FINDER_BUDGET) break;
+
+          CombinationsIndexArray combos(ints.size(), j);
+          do {
+            SolutionBucket tempSolBucket(currSol.begin(), currSol.end());
+            for (int i = 0; i < combos.size(); i++) {
+              tempSolBucket.insert(ints[combos[i]]);
+            }
+
+            #if DEBUG_BACKTRACKING_SOLVER > 1
+            std::cout << "            NEXT_FINAL_SOLSET: [ ";
+            for (auto & ele : considerationSubsetCols) {
+              std::cout << ele << " ";
+            }
+            std::cout << "]" << std::endl;
+            #endif
+
+
+            bool res = backtrackingSolver(currWorklist, tempSolBucket);
+            memo[key.str()] = res;
+            if (res) {
+              return true;
+            }
+
+          } while (combos.advance());
+
+        }
+
+
+      }
+
+      return false;
+
+    }
+
+    //
+    // If the solution set contains any of the diff-set element, then it is already solved
+    // 
+    bool checkIfEleAlreadySolved(WorklistElement & ele, SolutionBucket & bucket) {
+      std::set<int> diffSet = getDiffSet(ele);
+      for (auto & s : bucket) {
+        for (auto & d : diffSet) {
+          if (s == d) return true;
+        }
+      }
+
+      return false;
+    }
+
+    //
+    // Solves the trivial cases, reduces worklist if either condition is met
+    //  1: Diffset of ele already belongs to the solutionBucket
+    //  2: The diff set size is one
+    // and returns a new worklist and solutionBucket
+    // 
+
+    std::pair<Worklist, SolutionBucket> solveTrivialCases(Worklist existingWorklist, SolutionBucket existingSolutionBucket) {
+      Worklist newWorklist;
+      SolutionBucket newSolutionBucket(existingSolutionBucket.begin(), existingSolutionBucket.end());
+      Worklist tempWorklist;
+
+      for (WorklistElement & ele : existingWorklist) {
+        auto diffSet = getDiffSet(ele);
+        if (diffSet.size() == 1) {
+          auto first = *diffSet.begin();
+          newSolutionBucket.insert(first);
+        } else {
+          tempWorklist.push_back(ele);
+        }
+      }
+
+      for (WorklistElement & ele : tempWorklist) {
+        if (checkIfEleAlreadySolved(ele, newSolutionBucket) == false) {
+          newWorklist.push_back(ele);
+        }
+      }
+
+      return std::pair<Worklist, SolutionBucket>(newWorklist, newSolutionBucket);
+    }
+
+    // 
+    // Returns a set of indices where the two Type Feedback vectors differ at
+    // We know that diff cannot possibly contain duplicates
+    // 
+    std::set<int> getDiffSet(std::pair<int, int> eles) {
+      auto first = typeVersions[eles.first];
+      auto second = typeVersions[eles.second];
+
+      std::set<int> diffSet;
+
+      assert(first.size() == second.size());
+      for (unsigned int i = 0; i < first.size(); i++) {
+        uint32_t v1 = getFeedbackAsUint(first[i]);
+        uint32_t v2 = getFeedbackAsUint(second[i]);
+
+        if (v1 != v2) {
+          diffSet.insert(i);
+        }
+      }
+
+      return diffSet;
+    }
+
+    // 
+    // Returns the genesis worklist, it returns n choose 2 over the list of Type Feedback versions
+    // We expect this to be efficient enough as even something like 100 type versions has a manageable
+    // result of 4952
+    // 
+    Worklist getGenesisWorklist() {
+      Worklist res;
+
+      // N choose 2
+      CombinationsIndexArray combos(typeVersions.size(), 2);
+      do {
+        std::vector<int> indices;
+        for (int i = 0; i < combos.size(); i++) {
+          indices.push_back(combos[i]);
+        }
+
+        assert(indices.size() == 2);
+        res.push_back(std::pair<int, int>(indices[0], indices[1]));
+
+      } while (combos.advance());
+
+      return res;
+
+    }
+
+    // 
+    // // TODO -- currently broken, will be fixed if need arises
+    // If two different solutions when applied to a worklist return the same solution, we consider them
+    // functionally equivalent
+    // SolutionBucket --> set<ints>
+    // Worklist --> std::vector<std::pair<int, int>>
+    // 
+    // SolutionBucket removeFunctionallyEquivalentSols(Worklist wl, SolutionBucket & considerationBucket) {
+    //   SolutionBucket newBucket;
+
+    //   std::vector<int> candidateSolutions(considerationBucket.begin(), considerationBucket.end());
+
+    //   std::vector<int> toRemove;
+
+    //   for (int i = 0; i < candidateSolutions.size(); i++) {
+    //     // Skip removed indices
+    //     if (std::find(toRemove.begin(), toRemove.end(), i) != toRemove.end()) {
+    //       continue;
+    //     }
+
+    //     newBucket.insert(candidateSolutions[i]);
+
+    //     for (int j = i + 1; j < candidateSolutions.size(); j++) {
+
+
+    //       SolutionBucket tempSolBucket1(considerationBucket.begin(), considerationBucket.end());
+    //       tempSolBucket1.insert(candidateSolutions[i]);
+
+    //       SolutionBucket tempSolBucket2(considerationBucket.begin(), considerationBucket.end());
+    //       tempSolBucket2.insert(candidateSolutions[j]);
+
+
+    //       auto soln1 = solveTrivialCases(wl, tempSolBucket1);
+    //       auto soln2 = solveTrivialCases(wl, tempSolBucket2);
+
+    //       // If both lead to same worklist then only keep the first one
+    //       if (soln1 == soln2) {
+    //         std::cout << "      (*) Found same worklist, removing redundant soln idx" << std::endl;
+    //         toRemove.push_back(j);
+    //       }
+
+    //     }
+    //   }
+
+    //   std::cout << "      (*) [Functional reduction] Before: " << considerationBucket.size() << ", After: " << newBucket.size() << std::endl;
+
+    //   return newBucket;
+    // }
+
+};

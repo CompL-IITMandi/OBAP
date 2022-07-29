@@ -7,3 +7,5 @@ commonRepository/
 packagewiseRepository/
 getReposFromServer.sh
 runTest.sh
+
+out*

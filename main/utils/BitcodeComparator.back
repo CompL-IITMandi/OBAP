@@ -1,0 +1,37 @@
+#include "BitcodeComparator.h"
+
+#include "llvm/ExecutionEngine/Orc/ThreadSafeModule.h"
+#include "llvm/Bitcode/BitcodeReader.h"
+#include "llvm/Support/raw_ostream.h"
+#include "opt/ModuleManager.h"
+
+unsigned BitcodeComparator::STRICTNESS = getenv("STRICTNESS") ? std::stoi(getenv("STRICTNESS")) : 2;
+unsigned BitcodeComparator::THRESHOLD_WEIGHT = getenv("THRESHOLD_WEIGHT") ? std::stoi(getenv("THRESHOLD_WEIGHT")) : 5;
+unsigned BitcodeComparator::THRESHOLD_FUNCALL = getenv("THRESHOLD_FUNCALL") ? std::stoi(getenv("THRESHOLD_FUNCALL")) : 25;
+unsigned BitcodeComparator::THRESHOLD_ARGEFFECT = getenv("THRESHOLD_ARGEFFECT") ? std::stoi(getenv("THRESHOLD_ARGEFFECT")) : 10;
+
+bool BitcodeComparator::compareBitcodes(const std::string & path1, const std::string & path2) {
+    // Load bitcodes and serialized pool for path1
+
+    // Load bitcodes and serialized pool for path2
+
+    // Do similarity analysis
+
+    return false;
+
+}
+
+bool BitcodeComparator::checkWeightSimilarity() {
+
+    return false;
+}
+
+bool BitcodeComparator::checkFunCallSimilarity() {
+
+    return false;
+}
+
+bool BitcodeComparator::checkArgEffectSimilarity() {
+
+    return false;
+}

@@ -1,6 +1,5 @@
-#ifndef RBIM_H
-#define RBIM_H
-
+#pragma once
+#include <unordered_map>
 
 class RshBuiltinWeights {
 public:
@@ -132,4 +131,3 @@ public:
     return weightMap[key];
   }
 };
-#endif

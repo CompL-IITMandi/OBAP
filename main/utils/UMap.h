@@ -1,4 +1,7 @@
 #pragma once
+#include <cstring>
+#include <cassert>
+#include <functional>
 #include <iostream>
 #include <string>
 #include <unistd.h>
