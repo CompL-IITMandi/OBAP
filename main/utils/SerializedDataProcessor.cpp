@@ -9,6 +9,8 @@
 #include "opt/ModuleManager.h"
 #include "utils/OBAHolder.h"
 
+#include "utils/deserializerData.h"
+
 #define DEBUG_LOCALS_INIT 0
 
 // Possible values 0, 1, 2
@@ -17,6 +19,150 @@
 
 
 #define PRINT_REPRESENTATIVE_SELECTION_NON_TRIVIAL_CASES 0
+
+unsigned int SerializedDataProcessor::getNumContexts() {
+  return _reducedContextWiseData.size();
+}
+
+
+void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
+  // 
+  // ouContainer is expecting getNumContexts() number of contexts to be present
+  // 
+
+  // An offset unit contains contextUnits
+  int ouIdx = rir::offsetUnit::contextsStartingIndex();
+  for (auto & ele : _reducedContextWiseData) {
+    // Case: V = 0, Just one binary
+    if (ele.second.size() == 1) {
+
+      SEXP cuContainer;
+      PROTECT(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(1)));
+      rir::contextUnit::addContext(cuContainer, ele.first);
+      rir::contextUnit::addVersioning(cuContainer, 0);
+      rir::contextUnit::addTFSlots(cuContainer, R_NilValue);
+
+      std::pair<SEXP, SEXP> data = ele.second[0];
+      SEXP buContainer;
+      PROTECT(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
+      rir::binaryUnit::addEpoch(buContainer, data.first);
+      rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
+      rir::binaryUnit::addTVData(buContainer, R_NilValue);
+      
+
+      // Add Binary unit to Context unit
+      rir::generalUtil::addSEXP(cuContainer, buContainer, rir::contextUnit::binsStartingIndex());
+
+      UNPROTECT(1);
+
+      // Add Context unit to Offset unit
+      rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
+      UNPROTECT(1);
+
+    } 
+    else if (_tvGraphData.find(ele.first) != _tvGraphData.end()) {
+
+      TVGraph tvg = _tvGraphData[ele.first];
+      auto numTypeVersions = tvg.getNumTypeVersions();
+
+      
+      if (numTypeVersions == 1) {
+        tvg.iterateOverTVs([&] (std::vector<uint32_t> slotData, TVNode node) {
+
+          auto nodeRes = node.get();
+
+          // If number of type versions is one and the number of binaries is also one, V = 0
+          if (nodeRes.size() == 1) {
+            SEXP cuContainer;
+            PROTECT(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(1)));
+            rir::contextUnit::addContext(cuContainer, ele.first);
+            rir::contextUnit::addVersioning(cuContainer, 0);
+            rir::contextUnit::addTFSlots(cuContainer, R_NilValue);
+
+            std::pair<SEXP, SEXP> data = nodeRes[0];
+            SEXP buContainer;
+            PROTECT(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
+            rir::binaryUnit::addEpoch(buContainer, data.first);
+            rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
+            rir::binaryUnit::addTVData(buContainer, R_NilValue);
+
+            // Add Binary unit to Context unit
+            rir::generalUtil::addSEXP(cuContainer, buContainer, rir::contextUnit::binsStartingIndex());
+
+            UNPROTECT(1);
+
+            // Add Context unit to Offset unit
+            rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
+            UNPROTECT(1);
+          } else {
+
+            // If number of type versions is one and the number of binaries is > 1, V = 1
+            SEXP cuContainer;
+            PROTECT(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(nodeRes.size())));
+            rir::contextUnit::addContext(cuContainer, ele.first);
+            rir::contextUnit::addVersioning(cuContainer, 1);
+            rir::contextUnit::addTFSlots(cuContainer, R_NilValue);
+
+            int startIdx = rir::contextUnit::binsStartingIndex();
+            for (auto & data : nodeRes) {
+              SEXP buContainer;
+              PROTECT(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
+              rir::binaryUnit::addEpoch(buContainer, data.first);
+              rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
+              rir::binaryUnit::addTVData(buContainer, R_NilValue);
+
+              // Add Binary unit to Context unit
+              rir::generalUtil::addSEXP(cuContainer, buContainer, startIdx);
+              startIdx++;
+              UNPROTECT(1);
+            }
+
+            // Add Context unit to Offset unit
+            rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
+            UNPROTECT(1);
+
+          }
+          
+        });
+      } else {
+        SEXP cuContainer;
+        PROTECT(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(tvg.getBinariesCount())));
+        rir::contextUnit::addContext(cuContainer, ele.first);
+        
+        rir::contextUnit::addVersioning(cuContainer, 2);
+        
+        rir::contextUnit::addTFSlots(cuContainer, tvg.getSolutionSorted());
+
+
+        int startIdx = rir::contextUnit::binsStartingIndex();
+        tvg.iterateOverTVs([&] (std::vector<uint32_t> slotData, TVNode node) {
+          auto nodeRes = node.get();
+          for (auto & data : nodeRes) {
+            SEXP buContainer;
+            PROTECT(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
+            rir::binaryUnit::addEpoch(buContainer, data.first);
+            rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
+            rir::binaryUnit::addTVData(buContainer, slotData);
+
+            // Add Binary unit to Context unit
+            rir::generalUtil::addSEXP(cuContainer, buContainer, startIdx);
+            startIdx++;
+            UNPROTECT(1);
+          }
+        });
+
+        // Add Context unit to Offset unit
+        rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
+        UNPROTECT(1);
+      }
+    } else {
+      Rf_error("Invalid case while creating deserializer unit!");
+    }
+
+    ouIdx++;
+  }
+
+}
 
 // 
 // Takes a vector of similar binaries and returns the one with the smallest requirement map
@@ -255,7 +401,7 @@ void SerializedDataProcessor::print(const unsigned int & space) {
 
   if (_reducedContextWiseData.size() > 0) {
     printSpace(space);
-    std::cout << "Reduced " << _reducedContextWiseData.size() << " contexts" << std::endl;
+    std::cout << "Processed Contexts" << std::endl;
   }
 
   unsigned int finalBins = 0;
@@ -268,7 +414,7 @@ void SerializedDataProcessor::print(const unsigned int & space) {
       std::cout << "├─(" << ele.first << "): " << _tvGraphData[ele.first].getBinariesCount() << " binaries" << std::endl;
       _tvGraphData[ele.first].print(space + 4);
     } else {
-      finalBins += ele.second.size() + 1;
+      finalBins += ele.second.size();
       std::cout << "├─(" << ele.first << "): " << ele.second.size() << " binaries" << std::endl;
     }
     // if (ele.second.size() > 1) {
@@ -301,219 +447,3 @@ void SerializedDataProcessor::print(const unsigned int & space) {
   printSpace(space);
   std::cout << "===============================" << std::endl;
 }
-
-// void doAnalysisOverContexts(const std::string & pathPrefix, SEXP contextMap, AnalysisCallback call) {
-//   static SEXP maskSym = Rf_install("mask");
-//   std::unordered_map<unsigned long, std::vector<SEXP>> contexts;
-
-//   std::cout << "Processing: " << pathPrefix << std::endl;
-
-//   REnvHandler contextMapHandler(contextMap);
-//   contextMapHandler.iterate([&] (SEXP epochSym, SEXP cData) {
-//     if (epochSym == maskSym) return;
-//     // #if DEBUG_CHECKPOINTS == 1
-//     // std::cout << "EPOCH: " << CHAR(PRINTNAME(epochSym)) << std::endl;
-//     // rir::contextData::print(cData, 2);
-//     // #endif
-
-//     unsigned long con = rir::contextData::getContext(cData);
-
-//     contexts[con].push_back(cData);
-//   });
-
-
-//   for (auto & ele : contexts) {
-//     std::cout << "  Processing context: " << rir::Context(ele.first) << std::endl;
-//     TVGraph g(ele.second);
-//     auto stat = g.init();
-//     g.print();
-
-//     if (!stat) {
-//       Rf_error("Init failed for TVGraph");
-//     }
-//   }
-
-//   // std::vector<rir::Context> contextsVec;
-//   // std::unordered_map<rir::Context, unsigned> weightAnalysis;
-//   // std::unordered_map<rir::Context, std::vector<std::pair<unsigned, std::vector<std::string>>> > simpleArgumentAnalysis;
-//   // std::unordered_map<rir::Context, std::vector<std::set<std::string>>> funCallBFData;
-
-//   // #if DEBUG_CHECKPOINTS == 1
-//   // std::cout << "Starting analysis over: " << pathPrefix << std::endl;
-//   // #endif
-
-
-//   // REnvHandler contextMapHandler(contextMap);
-//   // contextMapHandler.iterate([&] (SEXP contextSym, SEXP cData) {
-//   //   if (contextSym == maskSym) return;
-
-//   //   unsigned long con = rir::contextData::getContext(cData);
-//   //   rir::Context c(con);
-
-    
-
-//   //   contextsVec.push_back(c);          
-      
-//   //   std::stringstream bitcodePath, poolPath;
-//   //   bitcodePath << pathPrefix << CHAR(PRINTNAME(contextSym)) << ".bc";
-//   //   poolPath << pathPrefix << CHAR(PRINTNAME(contextSym)) << ".pool";
-
-//   //   #if DEBUG_CHECKPOINTS == 1
-//   //   std::cout << "    Analyzing: " << bitcodePath.str() << std::endl;
-//   //   #endif
-
-//   //   FILE *reader;
-//   //   reader = fopen(poolPath.str().c_str(),"r");
-
-//   //   if (!reader) {
-//   //     for (int i = 0; i < 10; i++) {
-//   //       sleep(1);
-//   //       // std::cout << "waiting to open: " << metadataPath.str() << std::endl;
-//   //       reader = fopen(poolPath.str().c_str(),"r");
-//   //       if (reader) break;
-//   //     }
-
-//   //     if (!reader) {
-//   //       std::cout << "unable to open " << poolPath.str() << std::endl;
-//   //       Rf_error("unable to open file!");
-//   //       return;
-//   //     }
-//   //   }
-
-//   //   // Initialize the deserializing stream
-//   //   R_inpstream_st inputStream;
-//   //   R_InitFileInPStream(&inputStream, reader, R_pstream_binary_format, NULL, R_NilValue);
-
-//   //   SEXP poolDataContainer;
-//   //   PROTECT(poolDataContainer = R_Unserialize(&inputStream));
-
-//   //   // load bitcode
-//   //   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> mb = llvm::MemoryBuffer::getFile(bitcodePath.str().c_str());
-//   //   llvm::orc::ThreadSafeContext TSC = std::make_unique<llvm::LLVMContext>();
-
-//   //   // Load the memory buffer into a LLVM module
-//   //   llvm::Expected<std::unique_ptr<llvm::Module>> llModuleHolder = llvm::parseBitcodeFile(mb->get()->getMemBufferRef(), *TSC.getContext());
-
-//   //   // ModuleManager to run our passes on the bitcodes
-//   //   ModuleManager MM(*llModuleHolder.get().get());
-
-//   //   MM.runPasses();
-
-//   //   auto callSiteCounterRes = MM.getRshCallSiteCounterRes();
-
-//   //   unsigned weight = 0;
-//   //   for (auto & ele : callSiteCounterRes) {
-//   //     weight += ele.second * RshBuiltinWeights::getWeight(ele.first().str());
-//   //   }
-    
-//   //   #if DEBUG_CHECKPOINTS == 1
-//   //   std::cout << "    == CALL SITE OPCODE SIMILARITY ==" << std::endl;
-//   //   for (auto & ele : callSiteCounterRes) {
-//   //     std::cout << "      " << ele.first().str() << " : " << ele.second << "[" << (ele.second * RshBuiltinWeights::getWeight(ele.first().str())) << "]" << std::endl;
-//   //   }
-//   //   std::cout << "        " << "Total : " << weight << std::endl;
-//   //   #endif
-
-//   //   weightAnalysis[c] = weight;
-
-//   //   std::string mainFunName(CHAR(STRING_ELT(VECTOR_ELT(rir::SerializedPool::getFNames(poolDataContainer), 0), 0)));
-
-//   //   // std::cout << c.toI() << " --> " << mainFunName << std::endl;
-
-
-//   //   auto argTrackRes = MM.getRshArgumentEffectSimpleRes();
-//   //   for (auto & ele : argTrackRes) {
-//   //     auto currFun = ele.first;
-//   //     auto currFunData = ele.second;
-//   //     if (currFun->getName().str() == mainFunName) {
-//   //       simpleArgumentAnalysis[c] = currFunData;
-//   //       break;
-//   //     }
-//   //   }
-
-//   //   #if DEBUG_CHECKPOINTS == 1
-//   //   std::cout << "    == ARG EFFECT TRACKING ==" << std::endl;
-//   //   for (auto & ele : argTrackRes) {
-//   //     auto currFun = ele.first;
-//   //     auto currFunData = ele.second;
-//   //     std::cout << "      Function: " << currFun->getName().str() << std::endl;
-//   //     for (auto & data : currFunData) {
-//   //       unsigned argIdx = data.first;
-//   //       auto calledFuns = data.second; 
-//   //       std::cout << "        [arg" << argIdx << "]: ";
-//   //       for (auto & funName : calledFuns) {
-//   //         std::cout << funName << " -- ";
-//   //       }
-//   //       std::cout << std::endl;
-//   //     }
-//   //   }
-//   //   #endif
-
-//   //   auto funcCallBFRes = MM.getFunctionCallBreathFirstRes();
-//   //   for (auto & ele : funcCallBFRes) {
-//   //     auto currFunName = ele.first().str();
-//   //     auto currFunData = ele.second;
-//   //     if (currFunName == mainFunName) {
-//   //       std::vector<std::set<std::string>> fc;
-//   //       for (auto & e : currFunData) fc.push_back(e.getFunctionSet());
-//   //       funCallBFData[c] = fc;
-//   //       break;
-//   //     }
-//   //   }
-
-//   //   #if DEBUG_CHECKPOINTS == 1
-//   //   std::cout << "    == FUN CALL BF ==" << std::endl;
-//   //   for (auto & ele : funcCallBFRes) {
-//   //     auto currFunName = ele.first().str();
-//   //     auto currFunData = ele.second;
-//   //     std::cout << "      " << currFunName;
-//   //     if (currFunName == mainFunName) {
-//   //       std::cout << " [MAIN]";
-//   //     }
-//   //     std::cout << std::endl;
-//   //     unsigned i = 0;
-//   //     for (auto & e : currFunData) {
-//   //       std::cout << "        " << ++i << ": " << e.getNodeCompressedName() << std::endl;
-//   //     }
-//   //   }
-
-//   //   #endif
-
-//   //   UNPROTECT(1);
-
-
-//   // });
-//   // call(contextsVec, weightAnalysis, simpleArgumentAnalysis, funCallBFData);
-// }
-
-// void compareContexts(std::vector<rir::Context> & contextsVec, ComparisonCallback call) {
-//   bool noStrictComparison = getenv("DISABLE_STRICT_COMPARISON") ? true : false;
-//   bool noRoughComparison = getenv("DISABLE_ROUGH_COMPARISON") ? true : false;
-//   for (auto it_currCon = contextsVec.begin(); it_currCon != contextsVec.end(); ++it_currCon) {
-//     auto it_other = it_currCon + 1;
-//     while (it_other != contextsVec.end()) {
-//       auto currCon = *it_currCon;
-//       auto other = *it_other;
-      
-//       // Strictly comparable
-//       if (noStrictComparison == false && other.smaller(currCon)) {
-//         call(currCon, other, ComparisonType::STRICT);
-//       } else if (noStrictComparison == false && currCon.smaller(other)) {
-//         call(other, currCon, ComparisonType::STRICT);
-//       }
-//       // Roughly comparable - EQ
-//       else if (noRoughComparison == false && other.roughlySmaller(currCon) && currCon.roughlySmaller(other)) {
-//         call(currCon, other, ComparisonType::ROUGH_EQ);
-//       }
-
-//       // Roughlt comparable - NEQ
-//       else if (noRoughComparison == false && other.roughlySmaller(currCon)) {
-//         call(currCon, other, ComparisonType::ROUGH_NEQ);
-//       } else if (noRoughComparison == false && currCon.roughlySmaller(other)) {
-//         call(other, currCon, ComparisonType::ROUGH_NEQ);
-//       }      
-//       it_other++;
-//     }
-//   }
-// }
-

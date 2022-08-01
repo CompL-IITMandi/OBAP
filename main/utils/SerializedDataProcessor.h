@@ -27,6 +27,12 @@ class SerializedDataProcessor {
     // Prints the final results of processing
     void print(const unsigned int & space);
 
+    // Populate the deserializer metadata
+    void populateOffsetUnit(SEXP ouContainer);
+
+    // Number of contexts
+    unsigned int getNumContexts();
+
   private:
     SEXP _cData;
     std::string _pathPrefix;

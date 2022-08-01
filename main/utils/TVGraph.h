@@ -144,21 +144,21 @@ class TVNode {
       // printSpace(space);
       // std::cout << "Diversions: " << diversions.size() << " unique req maps" << std::endl;
 
-      // #if DEBUG_WEIRD_CASES == 1
-      // printSpace(space);
-      // std::cout << "Debug Weird Cases: " << std::endl;
-      // for (auto & div : diversions) {
-      //   printSpace(space + 2);
-      //   if (div.second.size() > 1) {
-      //     std::cout << "(WEIRD CASE): " << div.first << std::endl;
-      //     for (auto & e : div.second) {
-      //       rir::contextData::print(e.second, space + 4);
-      //     }
-      //   } else {
-      //     std::cout << "(NORMAL CASE): " << div.first << std::endl;
-      //   } 
-      // }
-      // #endif
+      #if DEBUG_WEIRD_CASES == 1
+      printSpace(space);
+      std::cout << "Debug Weird Cases: " << std::endl;
+      for (auto & div : diversions) {
+        printSpace(space + 2);
+        if (div.second.size() > 1) {
+          std::cout << "(WEIRD CASE): " << div.first << std::endl;
+          for (auto & e : div.second) {
+            rir::contextData::print(e.second, space + 4);
+          }
+        } else {
+          std::cout << "(NORMAL CASE): " << div.first << std::endl;
+        } 
+      }
+      #endif
       
       // printSpace(space);
       // std::cout << "Sorted binaries: " << std::endl;
@@ -293,12 +293,14 @@ class TVGraph {
         nodes[i].print(space + 2);
       }
       if (solutionFound) {
-        printSpace(space);
-        std::cout << "└─(" << finalSolution.size() << " Slot Solution): ";
-        for (auto & ele : finalSolution) {
-          std::cout << ele << " ";
+        if (typeVersions.size() > 1) {
+          printSpace(space);
+          std::cout << "└─(" << finalSolution.size() << " Slot Solution): ";
+          for (auto & ele : finalSolution) {
+            std::cout << ele << " ";
+          }
+          std::cout << std::endl;
         }
-        std::cout << std::endl;
 
         // printSpace(space + 2);
         // std::cout << " ==== ==== SOLUTION ROWS ==== ==== " << std::endl;
@@ -329,6 +331,34 @@ class TVGraph {
       
       printSpace(space);
       std::cout << "=====================" << std::endl;
+    }
+
+    void iterateOverTVs(const std::function< void(std::vector<uint32_t>, TVNode) >& callback) {
+      auto soln = getSolutionSorted();
+      for (unsigned int i = 0; i < typeVersions.size(); i++) {
+        auto currTV = typeVersions[i];
+
+        std::vector<uint32_t> slotData;
+        for (auto & idx : soln) {
+          uint32_t curr = getFeedbackAsUint(currTV[idx]);
+          slotData.push_back(curr);
+        }
+
+
+        callback(slotData, nodes[i]);
+      }
+    }
+
+    std::vector<int> getSolutionSorted() {
+      assert(solutionFound == true);
+      std::vector<int> res(finalSolution.begin(), finalSolution.end());
+      std::sort(res.begin(), res.end());
+      return res;
+    }
+
+    std::set<int> getSolution() {
+      assert(solutionFound == true);
+      return finalSolution;
     }
 
   private:    

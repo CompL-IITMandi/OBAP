@@ -15,6 +15,7 @@
 #include "utils/SerializedDataProcessor.h"
 #include "utils/RshBuiltinsMap.h"
 #include "utils/UMap.h"
+#include "utils/deserializerData.h"
 
 #include <iostream>
 #include <stdlib.h>
@@ -72,9 +73,28 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
         // Get serialized metadata
         REnvHandler offsetMapHandler(rir::serializerData::getBitcodeMap(serDataContainer));
 
-        offsetMapHandler.iterate([&] (SEXP offsetIndex, SEXP contextMap) {
-          printSpace(4);
-          std::cout << "At offset " << CHAR(PRINTNAME(offsetIndex)) << std::endl;
+        int numOffsets = offsetMapHandler.size();
+        SEXP ddContainer;
+        PROTECT(ddContainer = Rf_allocVector(VECSXP, rir::deserializerData::getContainerSize(numOffsets)));
+        rir::deserializerData::addHast(ddContainer, rir::serializerData::getHast(serDataContainer));
+        
+        // printSpace(2);
+        // std::cout << "=== Deserializer Data Debug ===" << std::endl;
+
+        // printSpace(2);
+        // std::cout << "numOffsets: " << numOffsets << std::endl;
+
+        // printSpace(2);
+        // std::cout << "containerSize: " << rir::deserializerData::getContainerSize(numOffsets) << std::endl;
+
+        // printSpace(2);
+        // std::cout << "HAST: " << CHAR(PRINTNAME(rir::deserializerData::getHast(ddContainer))) << std::endl;
+        
+        int ddIdx = rir::deserializerData::offsetsStartingIndex();
+        offsetMapHandler.iterate([&] (SEXP offsetIndex, SEXP contextMap) {          
+          
+          // printSpace(4);
+          // std::cout << "At offset " << CHAR(PRINTNAME(offsetIndex)) << std::endl;
 
           std::stringstream pathPrefix;
           pathPrefix << folderPath << "/" << CHAR(PRINTNAME(rir::serializerData::getHast(serDataContainer))) << "_" << CHAR(PRINTNAME(offsetIndex)) << "_";
@@ -82,8 +102,30 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
           SerializedDataProcessor p(contextMap, pathPrefix.str());
           p.init();
           p.print(6);
+          
+          SEXP ouContainer;
+          PROTECT(ouContainer = Rf_allocVector(VECSXP, rir::offsetUnit::getContainerSize(p.getNumContexts())));
+          rir::offsetUnit::addOffsetIdx(ouContainer, std::stoi(CHAR(PRINTNAME(offsetIndex))));
+          rir::offsetUnit::addMask(ouContainer, 0ul);
+          // printSpace(4);
+          // std::cout << "offsetIndex: " << rir::offsetUnit::getOffsetIdxAsInt(ouContainer) << std::endl;
 
+          // printSpace(4);
+          // std::cout << "mask: " << rir::offsetUnit::getMaskAsUnsignedLong(ouContainer) << std::endl;
+          
+          // printSpace(4);
+          // std::cout << "offsetUnit Container Size: " << Rf_length(ouContainer) << std::endl;
+
+
+          p.populateOffsetUnit(ouContainer);
+
+          rir::generalUtil::addSEXP(ddContainer, ouContainer, ddIdx);
+          UNPROTECT(1);
+
+          ddIdx++;
         });
+
+        rir::deserializerData::print(ddContainer, 2);
 
 
         // R_outpstream_st outputStream;
@@ -108,7 +150,7 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
         // R_Serialize(serDataContainer, &outputStream);
         // fclose(fptr);
 
-        UNPROTECT(protecc + 1);
+        UNPROTECT(protecc + 2);
       }
     }
   } else {
