@@ -108,13 +108,16 @@ class REnvHandler {
     // iterator
     void iterate(const std::function< void(SEXP, SEXP) >& callback) {
       SEXP offsetBindings = R_lsInternal(_container, (Rboolean) false);
+      PROTECT(offsetBindings);
       for (int i = 0; i < Rf_length(offsetBindings); i++) {
-          SEXP key = Rf_install(CHAR(STRING_ELT(offsetBindings, i)));
-          SEXP binding = Rf_findVarInFrame(_container, key);
-          // skip inactive bindings
-          if (binding == R_UnboundValue) continue;
-          callback(key, binding);
+        // offsetBindings = R_lsInternal(_container, (Rboolean) false);
+        SEXP key = Rf_install(CHAR(STRING_ELT(offsetBindings, i)));
+        SEXP binding = Rf_findVarInFrame(_container, key);
+        // skip inactive bindings
+        if (binding == R_UnboundValue) continue;
+        callback(key, binding);
       }
+      UNPROTECT(1);
     }
 
 

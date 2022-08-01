@@ -11,8 +11,9 @@ using namespace std::chrono;
 
 // Possible values are 0, 1, 2
 #define DEBUG_BACKTRACKING_SOLVER 0
-#define DEBUG_IMP_CHECKPOINTS 1
+#define DEBUG_IMP_CHECKPOINTS 0
 
+#define DEBUG_WEIRD_CASES 0
 
 // 
 // Helper Classes
@@ -98,19 +99,11 @@ class Ticker {
 
 class TVNode {
   public:
-    void addNode(SEXP cData) {
+    void addNode(std::pair<SEXP, SEXP> cData) {
       redundantNodes++;
 
-      auto rData = rir::contextData::getReqMapAsVector(cData);
-      std::vector<std::string> reqMapVec;
-
-      for (int i = 0; i < Rf_length(rData); i++) {
-        SEXP ele = VECTOR_ELT(rData, i);
-        reqMapVec.push_back(CHAR(PRINTNAME(ele)));
-      }
-
-      std::sort(reqMapVec.begin(), reqMapVec.end());
-
+      auto rData = rir::contextData::getReqMapAsVector(cData.second);
+      std::vector<std::string> reqMapVec = getReqMapAsCppVector(rData);
       std::stringstream ss;
 
       for (auto & e : reqMapVec) {
@@ -123,31 +116,102 @@ class TVNode {
     int size() {
       return redundantNodes;
     }
+    
+    std::vector<std::pair<SEXP, SEXP>> get() {
+      std::vector<std::pair<SEXP, SEXP>> result;
+
+      for (auto & ele : diversions) {
+        // For each diversion case, if the number of elements is > 1, select one
+        result.push_back(ele.second[0]);
+      }
+
+      // Sort the result in the order of set subset property
+      std::sort(result.begin(), result.end(), [&] (std::pair<SEXP, SEXP> first, std::pair<SEXP, SEXP> second) {
+        std::set<std::string> s1(getReqMapAsCppSet(rir::contextData::getReqMapAsVector(first.second)));
+        std::set<std::string> s2(getReqMapAsCppSet(rir::contextData::getReqMapAsVector(second.second)));
+
+        // S1 is a subset of S2
+        return std::includes(s2.begin(), s2.end(), s1.begin(), s1.end());
+      });
+
+      return result;
+    }
 
     void print(unsigned int space = 0) {
-      printSpace(space);
-      std::cout << "=== TVNODE ===" << std::endl;
+      // printSpace(space);
+      // std::cout << "=== TVNODE ===" << std::endl;
       
-      printSpace(space);
-      std::cout << "Diversions: " << diversions.size() << std::endl;
+      // printSpace(space);
+      // std::cout << "Diversions: " << diversions.size() << " unique req maps" << std::endl;
 
-      if (diversions.size() > 1) {
-        printSpace(space + 2);
-        std::cout << "Non Trivial Diversions" << std::endl;
-        for (auto & e : diversions) {
-          printSpace(space + 4);
-          std::cout << "" << e.first << std::endl;
-        }
-      } else {
-        printSpace(space + 2);
-        std::cout << "Trivial Diversions" << std::endl;
-      }
-      printSpace(space);
-      std::cout << "==============" << std::endl;
+      // #if DEBUG_WEIRD_CASES == 1
+      // printSpace(space);
+      // std::cout << "Debug Weird Cases: " << std::endl;
+      // for (auto & div : diversions) {
+      //   printSpace(space + 2);
+      //   if (div.second.size() > 1) {
+      //     std::cout << "(WEIRD CASE): " << div.first << std::endl;
+      //     for (auto & e : div.second) {
+      //       rir::contextData::print(e.second, space + 4);
+      //     }
+      //   } else {
+      //     std::cout << "(NORMAL CASE): " << div.first << std::endl;
+      //   } 
+      // }
+      // #endif
+      
+      // printSpace(space);
+      // std::cout << "Sorted binaries: " << std::endl;
+      // auto result = get();
+      // printSpace(space + 2);
+      // for (int i = 0; i < result.size(); i++) {
+      //   auto ele = result[i];
+      //   std::vector<std::string> re(getReqMapAsCppVector(rir::contextData::getReqMapAsVector(ele.second)));
+      //   std::cout << "[ ";
+      //   for (auto & r : re) {
+      //     std::cout << r << " ";
+      //   }
+      //   std::cout << "]";
+      //   if (i + 1 != result.size()) {
+      //     std::cout << " () ";
+      //   }
+      // }
+      // std::cout << std::endl;
+
+      // printSpace(space);
+      // std::cout << "==============" << std::endl;
+
+      // auto result = get();
+      // printSpace(space);
+      // std::cout << "└─(" << result.size() << " sorted binaries): " << diversions.size() << " diversions" << std::endl;
     }
   private:
-    std::unordered_map<std::string, std::vector<SEXP>> diversions;
+    std::unordered_map<std::string, std::vector<std::pair<SEXP, SEXP>>> diversions;
     unsigned int redundantNodes = 0;
+    
+    std::vector<std::string> getReqMapAsCppVector(SEXP rData) {
+      std::vector<std::string> reqMapVec;
+
+      for (int i = 0; i < Rf_length(rData); i++) {
+        SEXP ele = VECTOR_ELT(rData, i);
+        reqMapVec.push_back(CHAR(PRINTNAME(ele)));
+      }
+
+      std::sort(reqMapVec.begin(), reqMapVec.end());
+
+      return reqMapVec;
+    }
+
+    std::set<std::string> getReqMapAsCppSet(SEXP rData) {
+      std::set<std::string> reqSet;
+
+      for (int i = 0; i < Rf_length(rData); i++) {
+        SEXP ele = VECTOR_ELT(rData, i);
+        reqSet.insert(CHAR(PRINTNAME(ele)));
+      }
+
+      return reqSet;
+    }
 
     
 };
@@ -159,19 +223,24 @@ class TVGraph {
 
     unsigned int SLOT_FINDER_BUDGET = 10;
 
+    TVGraph() {}
+
     // 
     // Expects a vector of contextData SEXP
     // 
-    TVGraph(std::vector<SEXP> & cDataVec) {
+    TVGraph(std::vector<std::pair<SEXP, SEXP>> & cDataVec) {
       for (auto & cData : cDataVec) {
         addNode(cData);
       }
     }
 
+    unsigned int getNumTypeVersions() {
+      return typeVersions.size();
+    }
+
     bool init() {
-      bool slotFound = false;
       if (typeVersions.size() > 1) {
-        slotFound = solve();
+        solutionFound = solve();
         assert (checkValidity(finalSolution));
 
         auto solSize = finalSolution.size();
@@ -199,28 +268,56 @@ class TVGraph {
         std::cout << "===================================" << std::endl;
         #endif
       } else {
-        slotFound = true;
+        solutionFound = true;
       } 
        
-      return slotFound;
+      return solutionFound;
+    }
+
+    unsigned int getBinariesCount() {
+      unsigned int res = 0;
+      for (unsigned int i = 0; i < typeVersions.size(); i++) {
+        res += nodes[i].get().size();
+      }
+
+      return res;
     }
     
     void print(unsigned int space = 0) {
       assert(typeVersions.size() == nodes.size());
-      printSpace(space);
-      std::cout << "Found " << typeVersions.size() << " Type Versions" << std::endl;
+      // printSpace(space);
+      // std::cout << "Found " << typeVersions.size() << " Type Versions" << std::endl;
       for (unsigned int i = 0; i < typeVersions.size(); i++) {
-        printSpace(space + 2);
-        std::cout << "Type version " << i << " (" << nodes[i].size() << " redundant nodes) " << ": {";
-        // int k = 0;
-        // for (auto & e : ele) {
-        //   std::cout << " (" << k++ << ")[";
-        //   e.print(std::cout);
-        //   std::cout << "]";
-        // }
-        std::cout << "}" << std::endl;
-        nodes[i].print(space + 4);
+        printSpace(space);
+        std::cout << "├─(Type version " << i << "): " << nodes[i].get().size() << " binaries" << std::endl;
+        nodes[i].print(space + 2);
       }
+      if (solutionFound) {
+        printSpace(space);
+        std::cout << "└─(" << finalSolution.size() << " Slot Solution): ";
+        for (auto & ele : finalSolution) {
+          std::cout << ele << " ";
+        }
+        std::cout << std::endl;
+
+        // printSpace(space + 2);
+        // std::cout << " ==== ==== SOLUTION ROWS ==== ==== " << std::endl;
+        // for (auto & tv : typeVersions) {
+        //   printSpace(space + 4);
+        //   std::cout << "{ ";
+        //   for (auto & idx : finalSolution) {
+        //     tv[idx].print(std::cout);
+        //     std::cout << "; ";
+        //   }
+        //   std::cout << "}" << std::endl;
+        // }
+        // printSpace(space + 2);
+        // std::cout << "===================================" << std::endl;
+      } else {
+        Rf_error("No Slot solution found!");
+      }
+
+
     }
 
     static void printStats(unsigned int space = 0) {
@@ -240,11 +337,12 @@ class TVGraph {
     typedef std::vector<std::pair<int, int>> Worklist;
     typedef std::set<int> SolutionBucket;
 
+    bool solutionFound = false;
     SolutionBucket finalSolution;
     std::vector<TFVector> typeVersions;
     std::unordered_map<unsigned int, TVNode> nodes;
 
-    std::unordered_map<std::string, bool> memo;
+    // std::unordered_map<std::string, bool> memo;
 
     // 
     // Helper methods
@@ -256,8 +354,8 @@ class TVGraph {
     // vector already exists then adds the current node as a redundant node to it, otherwise
     // creates a new entry for the current node
     // 
-    void addNode(SEXP cData) {
-      TFVector currTFVector = getFeedbackAsVector(cData);
+    void addNode(std::pair<SEXP, SEXP> cData) {
+      TFVector currTFVector = getFeedbackAsVector(cData.second);
       
       // If curr exists then add to an existing node
       unsigned int i = 0;
@@ -433,12 +531,12 @@ class TVGraph {
         key << e;
       }
 
-      if (memo.find(key.str()) != memo.end()) {
-        return memo[key.str()];
-      }
+      // if (memo.find(key.str()) != memo.end()) {
+      //   return memo[key.str()];
+      // }
 
       if (currSol.size() > SLOT_FINDER_BUDGET) {
-        memo[key.str()] = false;
+        // memo[key.str()] = false;
         return false;
       }
 
@@ -449,7 +547,7 @@ class TVGraph {
       
       if (currWorklist.size() == 0) {
         finalSolution = currSol;
-        memo[key.str()] = true;
+        // memo[key.str()] = true;
         return true;
       }
 
@@ -514,7 +612,7 @@ class TVGraph {
             
             
             auto res = backtrackingSolver(soln.first, soln.second);
-            memo[key.str()] = res;
+            // memo[key.str()] = res;
             return res;
           }
           // If the worklist with the newly added solution is smaller than the existing worklist, we keep it
@@ -567,7 +665,7 @@ class TVGraph {
 
 
             bool res = backtrackingSolver(currWorklist, tempSolBucket);
-            memo[key.str()] = res;
+            // memo[key.str()] = res;
             if (res) {
               return true;
             }

@@ -59,6 +59,9 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
         SEXP serDataContainer;
         PROTECT(serDataContainer = R_Unserialize(&inputStream));
 
+        unsigned int protecc = 0;
+        // rir::serializerData::recursivelyProtect(serDataContainer);
+
         printSpace(0);
         std::cout << "Processing: " << fName << std::endl;
         printSpace(2);
@@ -105,7 +108,7 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
         // R_Serialize(serDataContainer, &outputStream);
         // fclose(fptr);
 
-        UNPROTECT(1);
+        UNPROTECT(protecc + 1);
       }
     }
   } else {

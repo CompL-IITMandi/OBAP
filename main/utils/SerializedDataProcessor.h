@@ -4,11 +4,16 @@
 #include <unordered_map>
 #include <vector>
 #include <string>
+#include <functional>
 
 #include "utils/Debug.h"
 
+#include "utils/TVGraph.h"
+
 // This class is responsible for processing a contextData
 class SerializedDataProcessor {
+  typedef std::unordered_map<unsigned long, std::vector<std::pair<SEXP, SEXP>>> ContextWiseData;
+  
   public:
     SerializedDataProcessor(SEXP cData, const std::string & pathPrefix) : _cData(cData), _pathPrefix(pathPrefix) {}
 
@@ -28,7 +33,14 @@ class SerializedDataProcessor {
     unsigned int _origBitcodes = 0;
     unsigned int _deprecatedContexts = 0;
     unsigned int _deprecatedBitcodes = 0;
-    std::unordered_map<unsigned long, std::vector<SEXP>> _origContextWiseData;
+
+    // Iterates over (epoch, cData)
+    void iterateOverContextWiseData(ContextWiseData & cwd, std::function<void(SEXP, SEXP)> f);
+
+    ContextWiseData _origContextWiseData;
+    ContextWiseData _reducedContextWiseData;
+
+    std::unordered_map<unsigned long, TVGraph> _tvGraphData;
 
 };
 
