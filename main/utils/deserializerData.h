@@ -114,11 +114,11 @@ namespace rir {
 
         static void print(SEXP container, const unsigned int & space) {
             printSpace(space);
-            std::cout << "├── Epoch: " << CHAR(PRINTNAME(getEpoch(container))) << std::endl;
+            std::cout << "├─ Epoch: " << CHAR(PRINTNAME(getEpoch(container))) << std::endl;
 
             printSpace(space);
             SEXP rMap = getReqMap(container);
-            std::cout << "├── ReqMap(" << Rf_length(rMap) << "): [ ";
+            std::cout << "├─ ReqMap(" << Rf_length(rMap) << "): [ ";
             for (int i = 0; i < Rf_length(rMap); i++) {
                 std::cout << CHAR(PRINTNAME(VECTOR_ELT(rMap, i))) << " ";
             }
@@ -126,13 +126,13 @@ namespace rir {
 
             if (getTVData(container) == R_NilValue) {
                 printSpace(space);
-                std::cout << "└── TV DATA: NA" << std::endl;
+                std::cout << "└─ TV DATA: NA" << std::endl;
             } else {
 
                 SEXP TVData = getTVData(container);
 
                 printSpace(space);
-                std::cout << "└── TV DATA: [ ";
+                std::cout << "└─ TV DATA: [ ";
 
                 for (int i = 0; i < Rf_length(TVData); i++) {
                     auto ele = getUint32t(TVData, i);
@@ -140,6 +140,7 @@ namespace rir {
                 }
                 std::cout << "]" << std::endl;
             }
+            std::cout << std::endl;
         }
         
     };
