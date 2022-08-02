@@ -289,7 +289,14 @@ class TVGraph {
       // std::cout << "Found " << typeVersions.size() << " Type Versions" << std::endl;
       for (unsigned int i = 0; i < typeVersions.size(); i++) {
         printSpace(space);
-        std::cout << "├─(Type version " << i << "): " << nodes[i].get().size() << " binaries" << std::endl;
+        std::cout << "├─(Type version " << i << "): " << nodes[i].get().size() << " binaries [ ";
+
+        for (auto & ele : typeVersions[i]) {
+          std::cout << getFeedbackAsUint(ele) << " ";
+        }
+
+        std::cout << "]" << std::endl;
+
         nodes[i].print(space + 2);
       }
       if (solutionFound) {

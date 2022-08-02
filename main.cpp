@@ -22,9 +22,99 @@
 #include <functional>
 #include <sstream>
 
+std::string outputPath;
+std::string inputPath;
+
+static void saveDMetaAndCopyFiles(SEXP ddContainer, const std::string & metaFilename) {
+  std::stringstream outFilePath;
+
+  outFilePath << outputPath << "/" << metaFilename;
+
+  R_outpstream_st outputStream;
+  FILE *fptr;
+  fptr = fopen(outFilePath.str().c_str(),"w");
+  if (!fptr) {
+    for (int i = 0; i < 10; i++) {
+      sleep(1);
+      std::cout << "[W]waiting to open: " << outFilePath.str() << std::endl;
+      fptr = fopen(outFilePath.str().c_str(),"w");
+      if (fptr) break;
+    }
+
+    if (!fptr) {
+      std::cout << "[W]unable to open " << outFilePath.str() << std::endl;
+      Rf_error("[W]unable to open file!");
+    }
+  }
+  
+  R_InitFileOutPStream(&outputStream,fptr,R_pstream_binary_format, 0, NULL, R_NilValue);
+  R_Serialize(ddContainer, &outputStream);
+  fclose(fptr);
+
+  // Copy all relavant binaries
+  rir::deserializerData::iterateOverUnits(ddContainer, [&](SEXP ddContainer, SEXP offsetUnitContainer, SEXP contextUnitContainer, SEXP binaryUnitContainer) {
+    std::stringstream binInPathPrefix, binOutPathPrefix;
+
+    binInPathPrefix << inputPath << "/" << CHAR(PRINTNAME(rir::deserializerData::getHast(ddContainer))) 
+                           << "_" << rir::offsetUnit::getOffsetIdxAsInt(offsetUnitContainer)
+                           << "_" << CHAR(PRINTNAME(rir::binaryUnit::getEpoch(binaryUnitContainer)));
+
+    binOutPathPrefix << outputPath  << "/" << CHAR(PRINTNAME(rir::deserializerData::getHast(ddContainer))) 
+                           << "_" << rir::offsetUnit::getOffsetIdxAsInt(offsetUnitContainer)
+                           << "_" << CHAR(PRINTNAME(rir::binaryUnit::getEpoch(binaryUnitContainer)));
+
+    {
+      // Copy BC
+      std::ifstream  src(binInPathPrefix.str() + ".bc", std::ios::binary);
+      std::ofstream  dst(binOutPathPrefix.str() + ".bc",   std::ios::binary);
+
+      dst << src.rdbuf();
+    }
+
+    {
+      // Copy BC
+      std::ifstream  src(binInPathPrefix.str() + ".pool", std::ios::binary);
+      std::ofstream  dst(binOutPathPrefix.str() + ".pool",   std::ios::binary);
+      
+      dst << src.rdbuf();
+    }
+
+  });
+}
+
+static void testSavedDMeta(const std::string & metaFilename) {
+  std::stringstream path;
+  path << outputPath << "/" << metaFilename;
+
+  FILE *reader;
+  reader = fopen(path.str().c_str(),"r");
+
+  if (!reader) {
+    for (int i = 0; i < 10; i++) {
+      sleep(1);
+      reader = fopen(path.str().c_str(),"r");
+      if (reader) break;
+    }
+
+    if (!reader) {
+      std::cerr << "unable to open " << path.str() << std::endl;
+      Rf_error("unable to open file!");
+    }
+  }
+
+  // Initialize the deserializing stream
+  R_inpstream_st inputStream;
+  R_InitFileInPStream(&inputStream, reader, R_pstream_binary_format, NULL, R_NilValue);
+
+  SEXP ddContainer;
+  PROTECT(ddContainer = R_Unserialize(&inputStream));
+
+  rir::deserializerData::print(ddContainer, 2);
+
+  UNPROTECT(1);
+}
 
 static void iterateOverMetadatasInDirectory(const char * folderPath) {
-  std::cout << "iterateOverMetadatasInDirectory" << std::endl;
   DIR *dir;
   struct dirent *ent;
   
@@ -77,24 +167,12 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
         SEXP ddContainer;
         PROTECT(ddContainer = Rf_allocVector(VECSXP, rir::deserializerData::getContainerSize(numOffsets)));
         rir::deserializerData::addHast(ddContainer, rir::serializerData::getHast(serDataContainer));
-        
-        // printSpace(2);
-        // std::cout << "=== Deserializer Data Debug ===" << std::endl;
-
-        // printSpace(2);
-        // std::cout << "numOffsets: " << numOffsets << std::endl;
-
-        // printSpace(2);
-        // std::cout << "containerSize: " << rir::deserializerData::getContainerSize(numOffsets) << std::endl;
-
-        // printSpace(2);
-        // std::cout << "HAST: " << CHAR(PRINTNAME(rir::deserializerData::getHast(ddContainer))) << std::endl;
-        
+                
         int ddIdx = rir::deserializerData::offsetsStartingIndex();
         offsetMapHandler.iterate([&] (SEXP offsetIndex, SEXP contextMap) {          
           
-          // printSpace(4);
-          // std::cout << "At offset " << CHAR(PRINTNAME(offsetIndex)) << std::endl;
+          printSpace(4);
+          std::cout << "Offset: " << CHAR(PRINTNAME(offsetIndex)) << std::endl;
 
           std::stringstream pathPrefix;
           pathPrefix << folderPath << "/" << CHAR(PRINTNAME(rir::serializerData::getHast(serDataContainer))) << "_" << CHAR(PRINTNAME(offsetIndex)) << "_";
@@ -107,15 +185,6 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
           PROTECT(ouContainer = Rf_allocVector(VECSXP, rir::offsetUnit::getContainerSize(p.getNumContexts())));
           rir::offsetUnit::addOffsetIdx(ouContainer, std::stoi(CHAR(PRINTNAME(offsetIndex))));
           rir::offsetUnit::addMask(ouContainer, 0ul);
-          // printSpace(4);
-          // std::cout << "offsetIndex: " << rir::offsetUnit::getOffsetIdxAsInt(ouContainer) << std::endl;
-
-          // printSpace(4);
-          // std::cout << "mask: " << rir::offsetUnit::getMaskAsUnsignedLong(ouContainer) << std::endl;
-          
-          // printSpace(4);
-          // std::cout << "offsetUnit Container Size: " << Rf_length(ouContainer) << std::endl;
-
 
           p.populateOffsetUnit(ouContainer);
 
@@ -124,31 +193,12 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
 
           ddIdx++;
         });
-
+        
         rir::deserializerData::print(ddContainer, 2);
 
+        saveDMetaAndCopyFiles(ddContainer, fName);
 
-        // R_outpstream_st outputStream;
-        // FILE *fptr;
-        // fptr = fopen(metadataPath.str().c_str(),"w");
-        // if (!fptr) {
-        //   for (int i = 0; i < 10; i++) {
-        //     sleep(1);
-        //     std::cout << "[W]waiting to open: " << metadataPath.str() << std::endl;
-        //     fptr = fopen(metadataPath.str().c_str(),"w");
-        //     if (fptr) break;
-        //   }
-
-        //   if (!fptr) {
-        //     std::cout << "[W]unable to open " << metadataPath.str() << std::endl;
-        //     Rf_error("[W]unable to open file!");
-        //     continue;
-        //   }
-        // }
-        
-        // R_InitFileOutPStream(&outputStream,fptr,R_pstream_binary_format, 0, NULL, R_NilValue);
-        // R_Serialize(serDataContainer, &outputStream);
-        // fclose(fptr);
+        testSavedDMeta(fName);
 
         UNPROTECT(protecc + 2);
       }
@@ -198,14 +248,17 @@ int main(int argc, char** argv) {
   resume_stdout(fd);
   std::cout.clear();
 
-  if (argc != 2) {
-    std::cerr << "Usage: bcp path_to_folder" << std::endl;
+  if (argc != 3) {
+    std::cerr << "Usage: bcp path_to_folder output_folder" << std::endl;
     exit(EXIT_FAILURE);
   }
 
   std::cerr << "R initialization successful!" << std::endl;
 
   auto bitcodesFolder = argv[1];
+
+  inputPath = argv[1];
+  outputPath = argv[2];
 
   RshBuiltinWeights::init();
 
