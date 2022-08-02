@@ -1,14 +1,8 @@
 #pragma once
 
 #include "Rinternals.h"
-
-#include <sstream>
-#include "utils/UMap.h"
-#include "utils/FunctionSignature.h"
-#include "runtime/TypeFeedback.h"
 #include "runtime/Context.h"
 
-#include <chrono>
 namespace rir {
     struct generalUtil {
         static void addSEXP(SEXP container, SEXP data, const int & index) {
@@ -156,17 +150,17 @@ namespace rir {
         static SEXP getContext(SEXP container) { return getSEXP(container, 0); }
         
         static void addContext(SEXP container, const unsigned long & data) { addUnsignedLong(container, data, 0); }
-        static unsigned long getContextAsUnsignedLong(SEXP container) { getUnsignedLong(container, 0); }
+        static unsigned long getContextAsUnsignedLong(SEXP container) { return getUnsignedLong(container, 0); }
 
         // 
         // 1: Version
         // 
 
         static void addVersioning(SEXP container, SEXP data) { addSEXP(container, data, 1); }
-        static void getVersioning(SEXP container) { getSEXP(container, 1); }
+        static SEXP getVersioning(SEXP container) { return getSEXP(container, 1); }
         
         static void addVersioning(SEXP container, const int & data) { addInt(container, data, 1); }
-        static int getVersioningAsInt(SEXP container) { getInt(container, 1); }
+        static int getVersioningAsInt(SEXP container) { return getInt(container, 1); }
 
         // 
         // 2: TFSlots
