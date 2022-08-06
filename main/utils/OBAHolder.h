@@ -22,7 +22,7 @@ class OBAHolder {
 
   public:
     OBAHolder() = delete;
-    OBAHolder(const std::string & pathPrefix) : _pathPrefix(pathPrefix) {
+    OBAHolder(const std::string & pathPrefix, SEXP cData) : _pathPrefix(pathPrefix), _cData(cData) {
       init();
     }
     void print(const unsigned int & space) const;
@@ -31,6 +31,7 @@ class OBAHolder {
 
     rir::FunctionSignature getFS();
 
+    std::set<std::string> reqMap;
   private:
     // 
     // Local vars
@@ -38,6 +39,7 @@ class OBAHolder {
     const std::string _pathPrefix;
     std::string _mainFunHandle;
     rir::FunctionSignature _functionSignature;
+    SEXP _cData;
     // 
     // Analysis Results
     // For funCallBF and weightAnalysis we only keep the main functions result as matching promises is not always possible.

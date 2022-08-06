@@ -61,6 +61,18 @@ rir::FunctionSignature OBAHolder::getFS() {
   return _functionSignature;
 }
 
+static std::set<std::string> getReqMapAsCppSet(SEXP rData) {
+  std::set<std::string> reqSet;
+
+  for (int i = 0; i < Rf_length(rData); i++) {
+    SEXP ele = VECTOR_ELT(rData, i);
+    reqSet.insert(CHAR(PRINTNAME(ele)));
+  }
+
+  return reqSet;
+}
+
+
 void OBAHolder::init() {
   std::stringstream bitcodePath, poolPath;
   bitcodePath << _pathPrefix << ".bc";
@@ -89,6 +101,8 @@ void OBAHolder::init() {
 
   SEXP poolDataContainer;
   PROTECT(poolDataContainer = R_Unserialize(&inputStream));
+
+  reqMap = getReqMapAsCppSet(rir::contextData::getReqMapAsVector(_cData));
 
   unsigned int protecc = 0;
   // rir::SerializedPool::recursivelyProtect(poolDataContainer);  

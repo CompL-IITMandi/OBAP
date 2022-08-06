@@ -276,7 +276,7 @@ void SerializedDataProcessor::init() {
       
       std::stringstream pref1;
       pref1 << _pathPrefix << CHAR(PRINTNAME(cDataVec[i].first));
-      OBAHolder r1(pref1.str());
+      OBAHolder r1(pref1.str(), cDataVec[i].second);
 
       #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
       printSpace(8);
@@ -290,7 +290,7 @@ void SerializedDataProcessor::init() {
         }
         std::stringstream pref2;
         pref2 << _pathPrefix << CHAR(PRINTNAME(cDataVec[j].first));
-        OBAHolder r2(pref2.str());
+        OBAHolder r2(pref2.str(), cDataVec[j].second);
 
         // std::cout << "numArguments: " << (r1.getFS().numArguments == r2.getFS().numArguments) << std::endl;
 
@@ -308,14 +308,20 @@ void SerializedDataProcessor::init() {
         std::cout << "(" << i << "," << j << ")";
         #endif
         if (cRes.similar && argSimilar) {
-          removed.push_back(j);
-          _deprecatedBitcodes++;
+          // We only deprecate if one is dispatchable in the absence of other, if they are exclusive we might run into theoretical worst case where
+          // optimistic unlock never happens
+          if (std::includes(r1.reqMap.begin(), r1.reqMap.end(), r2.reqMap.begin(), r2.reqMap.end()) || 
+              std::includes(r2.reqMap.begin(), r2.reqMap.end(), r1.reqMap.begin(), r1.reqMap.end())) {
+            removed.push_back(j);
+            _deprecatedBitcodes++;
 
-          similars.push_back(cDataVec[j]);
+            similars.push_back(cDataVec[j]);
 
-          #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
-          std::cout << " [SIMILAR]";
-          #endif
+            #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
+            std::cout << " [SIMILAR]";
+            #endif
+          }
+
         }
 
         #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
