@@ -58,14 +58,14 @@ struct FunctionSignature {
     }
 
   public:
-    FunctionSignature() = delete;
+    FunctionSignature() {}
     FunctionSignature(Environment envCreation, OptimizationLevel optimization)
         : envCreation(envCreation), optimization(optimization) {}
 
     size_t formalNargs() const { return numArguments; }
 
-    const Environment envCreation;
-    const OptimizationLevel optimization;
+    Environment envCreation;
+    OptimizationLevel optimization;
     unsigned numArguments = 0;
     bool hasDotsFormals = false;
     bool hasDefaultArgs = false;

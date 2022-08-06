@@ -57,6 +57,10 @@ void OBAHolder::print(const unsigned int & space) const {
   std::cout << "=============================" << std::endl;
 }
 
+rir::FunctionSignature OBAHolder::getFS() {
+  return _functionSignature;
+}
+
 void OBAHolder::init() {
   std::stringstream bitcodePath, poolPath;
   bitcodePath << _pathPrefix << ".bc";
@@ -91,6 +95,8 @@ void OBAHolder::init() {
 
 
   fclose(reader);
+
+  _functionSignature = rir::SerializedPool::getFS(poolDataContainer);
 
 
   std::string mainFunName(CHAR(STRING_ELT(VECTOR_ELT(rir::SerializedPool::getFNames(poolDataContainer), 0), 0)));

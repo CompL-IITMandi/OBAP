@@ -262,6 +262,8 @@ void SerializedDataProcessor::init() {
     // Bitcode : Prefix.bc
     // Pool    : Prefix.pool
 
+    // std::cout << "Context check" << std::endl;
+
     std::vector<unsigned int> removed;
     std::vector<std::pair<SEXP, SEXP>> groups;
     for (unsigned int i = 0; i < cDataVec.size(); i++) {
@@ -289,6 +291,8 @@ void SerializedDataProcessor::init() {
         std::stringstream pref2;
         pref2 << _pathPrefix << CHAR(PRINTNAME(cDataVec[j].first));
         OBAHolder r2(pref2.str());
+
+        // std::cout << "numArguments: " << (r1.getFS().numArguments == r2.getFS().numArguments) << std::endl;
 
         #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
         printSpace(10);

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "opt/ModuleManager.h"
-
+#include "utils/FunctionSignature.h"
 struct ComparisonResult {
   ComparisonResult(bool similar, unsigned argEffectResult, std::vector<unsigned> similarArgs) : similar(similar), argEffectResult(argEffectResult), similarArgs(similarArgs) {}
   bool similar;
@@ -29,12 +29,15 @@ class OBAHolder {
 
     ComparisonResult equals(const OBAHolder& other);
 
+    rir::FunctionSignature getFS();
+
   private:
     // 
     // Local vars
     // 
     const std::string _pathPrefix;
     std::string _mainFunHandle;
+    rir::FunctionSignature _functionSignature;
     // 
     // Analysis Results
     // For funCallBF and weightAnalysis we only keep the main functions result as matching promises is not always possible.

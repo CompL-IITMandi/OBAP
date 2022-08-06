@@ -109,7 +109,7 @@ static void testSavedDMeta(const std::string & metaFilename) {
   SEXP ddContainer;
   PROTECT(ddContainer = R_Unserialize(&inputStream));
 
-  rir::deserializerData::print(ddContainer, 2);
+  // rir::deserializerData::print(ddContainer, 2);
 
   UNPROTECT(1);
 }
@@ -194,7 +194,7 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
           ddIdx++;
         });
         
-        rir::deserializerData::print(ddContainer, 2);
+        // rir::deserializerData::print(ddContainer, 2);
 
         saveDMetaAndCopyFiles(ddContainer, fName);
 
