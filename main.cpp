@@ -240,7 +240,9 @@ int main(int argc, char** argv) {
 
   std::cout.setstate(std::ios_base::failbit);
   int fd = supress_stdout();
-  int status = Rf_initEmbeddedR(argc, argv);
+  char * embeddedRArgs = "--vanilla";
+  char ** embeddedRArgsP = &embeddedRArgs;
+  int status = Rf_initEmbeddedR(1, embeddedRArgsP);
   if (status < 0) {
     std::cerr << "R initialization failed." << std::endl;
     exit(EXIT_FAILURE);
