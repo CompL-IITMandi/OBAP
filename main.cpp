@@ -114,17 +114,17 @@ static void testSavedDMeta(const std::string & metaFilename) {
   UNPROTECT(1);
 }
 
-static void iterateOverMetadatasInDirectory(const char * folderPath) {
+static void iterateOverMetadatasInDirectory() {
   DIR *dir;
   struct dirent *ent;
   
-  if ((dir = opendir(folderPath)) != NULL) {
+  if ((dir = opendir(inputPath.c_str())) != NULL) {
     while ((ent = readdir(dir)) != NULL) {
       std::string fName = ent->d_name;
       if (fName.find(".meta") != std::string::npos) {
 
         std::stringstream metadataPath;
-        metadataPath << folderPath << "/" << fName;
+        metadataPath << inputPath << "/" << fName;
 
         FILE *reader;
         reader = fopen(metadataPath.str().c_str(),"r");
@@ -175,7 +175,7 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
           std::cout << "Offset: " << CHAR(PRINTNAME(offsetIndex)) << std::endl;
 
           std::stringstream pathPrefix;
-          pathPrefix << folderPath << "/" << CHAR(PRINTNAME(rir::serializerData::getHast(serDataContainer))) << "_" << CHAR(PRINTNAME(offsetIndex)) << "_";
+          pathPrefix << inputPath << "/" << CHAR(PRINTNAME(rir::serializerData::getHast(serDataContainer))) << "_" << CHAR(PRINTNAME(offsetIndex)) << "_";
 
           SerializedDataProcessor p(contextMap, pathPrefix.str());
           p.init();
@@ -204,7 +204,7 @@ static void iterateOverMetadatasInDirectory(const char * folderPath) {
       }
     }
   } else {
-    std::cerr << "\"" << folderPath << "\" has no metas, nothing to process" << std::endl;
+    std::cerr << "\"" << inputPath << "\" has no metas, nothing to process" << std::endl;
     exit(EXIT_FAILURE);
   }
 }
@@ -234,9 +234,21 @@ int main(int argc, char** argv) {
 
   if (!rHomeSet) {
     std::cerr << "R_HOME not set, set this to the GNUR built using the ./configure --enable-R-shlib flag" << std::endl;
-    std::cerr << "Usage: ./run.sh --no-save [path_to_folder] [output_folder]" << std::endl;
+    std::cerr << "Usage: ./run.sh [path_to_folder] [output_folder]" << std::endl;
     exit(EXIT_FAILURE);
   }
+
+  if (argc != 4) {
+    std::cerr << "Usage: ./run.sh [path_to_folder] [output_folder]" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  inputPath = argv[2];
+  outputPath = argv[3];
+
+  std::cout << "[OBAP Started]" << std::endl;
+  std::cout << "Raw Bitcodes Folder: " << inputPath << std::endl;
+  std::cout << "Processed Bitcodes Folder: " << outputPath << std::endl;
 
   std::cout.setstate(std::ios_base::failbit);
   int fd = supress_stdout();
@@ -248,19 +260,9 @@ int main(int argc, char** argv) {
   resume_stdout(fd);
   std::cout.clear();
 
-  if (argc != 4) {
-    std::cerr << "Usage: ./run.sh --no-save [path_to_folder] [output_folder]" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-
-  std::cout << "R initialization successful!" << std::endl;
-
-  inputPath = argv[2];
-  outputPath = argv[3];
-
   RshBuiltinWeights::init();
 
-  iterateOverMetadatasInDirectory(inputPath);
+  iterateOverMetadatasInDirectory();
 
   Rf_endEmbeddedR(0);
   return 0;
