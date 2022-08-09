@@ -234,7 +234,7 @@ int main(int argc, char** argv) {
 
   if (!rHomeSet) {
     std::cerr << "R_HOME not set, set this to the GNUR built using the ./configure --enable-R-shlib flag" << std::endl;
-    std::cerr << "Usage: R_HOME=PATH_TO_GNUR_BUILD bcp path_to_folder" << std::endl;
+    std::cerr << "Usage: ./run.sh --no-save [path_to_folder] [output_folder]" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -248,21 +248,19 @@ int main(int argc, char** argv) {
   resume_stdout(fd);
   std::cout.clear();
 
-  if (argc != 3) {
-    std::cerr << "Usage: bcp path_to_folder output_folder" << std::endl;
+  if (argc != 4) {
+    std::cerr << "Usage: ./run.sh --no-save [path_to_folder] [output_folder]" << std::endl;
     exit(EXIT_FAILURE);
   }
 
-  std::cerr << "R initialization successful!" << std::endl;
+  std::cout << "R initialization successful!" << std::endl;
 
-  auto bitcodesFolder = argv[1];
-
-  inputPath = argv[1];
-  outputPath = argv[2];
+  inputPath = argv[2];
+  outputPath = argv[3];
 
   RshBuiltinWeights::init();
 
-  iterateOverMetadatasInDirectory(bitcodesFolder);
+  iterateOverMetadatasInDirectory(inputPath);
 
   Rf_endEmbeddedR(0);
   return 0;
