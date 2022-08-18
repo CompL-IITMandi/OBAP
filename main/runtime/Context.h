@@ -357,6 +357,56 @@ struct Context {
         return res;
     }
 
+    void addMaskC1MinusC2(Context c1, Context c2) {
+        Context other(c1-c2);
+        // std::cout << "addMaskC1MinusC2" << std::endl;
+        // std::cout << "C1: " << c1 << std::endl;
+        // std::cout << "C2: " << c2 << std::endl;
+        // std::cout << "C1 - C2: " << other << std::endl;
+        for (auto i = other.flags.begin(); i != other.flags.end(); ++i) {
+            this->flags.set(*i);
+        }
+        for (auto i = other.typeFlags.begin(); i != other.typeFlags.end(); ++i) {
+            this->typeFlags.set(*i);
+        }
+    }
+
+    void addMaskC1UQUC2(Context c1, Context c2) {
+        Context other1(c1-c2);
+        Context res(0ul);
+        // Unique things belonging to C1 and C2 are removed, common part is preserved.
+        for (auto i = other1.typeFlags.begin(); i != other1.typeFlags.end(); ++i) {
+            this->typeFlags.set(*i);
+            res.typeFlags.set(*i);
+        }
+
+        Context other2(c1-c2);
+        // Context res(0ul);
+        // Unique things belonging to C1 and C2 are removed, common part is preserved.
+        for (auto i = other2.typeFlags.begin(); i != other2.typeFlags.end(); ++i) {
+            this->typeFlags.set(*i);
+            res.typeFlags.set(*i);
+        }
+        // std::cout << "addMaskC1UQUC2" << std::endl;
+        // std::cout << "C1: " << c1 << std::endl;
+        // std::cout << "C2: " << c2 << std::endl;
+        // std::cout << "res: " << res << std::endl;
+    }
+
+    void addMaskC1TYPC2(Context c1, Context c2) {
+        Context other(c1-c2);
+        Context res(0ul);
+        // Only type flags curbed
+        for (auto i = other.typeFlags.begin(); i != other.typeFlags.end(); ++i) {
+            this->typeFlags.set(*i);
+            res.typeFlags.set(*i);
+        }
+        // std::cout << "addMaskC1TYPC2" << std::endl;
+        // std::cout << "C1: " << c1 << std::endl;
+        // std::cout << "C2: " << c2 << std::endl;
+        // std::cout << "res: " << res << std::endl;
+    }
+
     Context getArgRelatedAssumptions(unsigned arg) {
         Context res;
         if (arg == 0) {

@@ -28,7 +28,7 @@ std::string inputPath;
 static void saveDMetaAndCopyFiles(SEXP ddContainer, const std::string & metaFilename) {
   std::stringstream outFilePath;
 
-  outFilePath << outputPath << "/" << metaFilename;
+  outFilePath << outputPath << "/" << metaFilename << "d";
 
   R_outpstream_st outputStream;
   FILE *fptr;
@@ -84,7 +84,7 @@ static void saveDMetaAndCopyFiles(SEXP ddContainer, const std::string & metaFile
 
 static void testSavedDMeta(const std::string & metaFilename) {
   std::stringstream path;
-  path << outputPath << "/" << metaFilename;
+  path << outputPath << "/" << metaFilename << "d";
 
   FILE *reader;
   reader = fopen(path.str().c_str(),"r");
@@ -117,6 +117,9 @@ static void testSavedDMeta(const std::string & metaFilename) {
 static void iterateOverMetadatasInDirectory() {
   DIR *dir;
   struct dirent *ent;
+
+  size_t functionsSeen = 0;
+  size_t functionsWithMoreThanOneContext = 0, functionsMasked = 0;
   
   if ((dir = opendir(inputPath.c_str())) != NULL) {
     while ((ent = readdir(dir)) != NULL) {
@@ -153,10 +156,10 @@ static void iterateOverMetadatasInDirectory() {
         unsigned int protecc = 0;
         // rir::serializerData::recursivelyProtect(serDataContainer);
 
-        printSpace(0);
-        std::cout << "Processing: " << fName << std::endl;
-        printSpace(2);
-        std::cout << "FunctionName: " << CHAR(PRINTNAME(rir::serializerData::getName(serDataContainer))) << std::endl;
+        // printSpace(0);
+        // std::cout << "Processing: " << fName << std::endl;
+        // printSpace(2);
+        // std::cout << "FunctionName: " << CHAR(PRINTNAME(rir::serializerData::getName(serDataContainer))) << std::endl;
 
         fclose(reader);
 
@@ -169,25 +172,59 @@ static void iterateOverMetadatasInDirectory() {
         rir::deserializerData::addHast(ddContainer, rir::serializerData::getHast(serDataContainer));
                 
         int ddIdx = rir::deserializerData::offsetsStartingIndex();
-        offsetMapHandler.iterate([&] (SEXP offsetIndex, SEXP contextMap) {          
+        offsetMapHandler.iterate([&] (SEXP offsetIndex, SEXP contextMap) {
+          functionsSeen++;
           
-          printSpace(4);
-          std::cout << "Offset: " << CHAR(PRINTNAME(offsetIndex)) << std::endl;
+          // printSpace(4);
+          // std::cout << "Offset: " << CHAR(PRINTNAME(offsetIndex)) << std::endl;
 
           std::stringstream pathPrefix;
           pathPrefix << inputPath << "/" << CHAR(PRINTNAME(rir::serializerData::getHast(serDataContainer))) << "_" << CHAR(PRINTNAME(offsetIndex)) << "_";
 
           SerializedDataProcessor p(contextMap, pathPrefix.str());
           p.init();
-          p.print(6);
+          // p.print(6);
+
+          if (p.getOrigContextsCount() > 1) {
+            functionsWithMoreThanOneContext++;
+          }
           
+
+          // 
+          // Each deserializer data i.e. the parent container vector, contains 'n' unique offsets.
+          //  These offsets are themselves a vector called as offset unit
+          //    Inside each offset unit there are context units
+          //      Inside each context unit there are binary units
+          // 
+
+          // 
+          // Create a offset unit that contains the desired number of contexts
+          // 
           SEXP ouContainer;
           PROTECT(ouContainer = Rf_allocVector(VECSXP, rir::offsetUnit::getContainerSize(p.getNumContexts())));
+          
+          // 
+          // Add Offset idx
+          // 
           rir::offsetUnit::addOffsetIdx(ouContainer, std::stoi(CHAR(PRINTNAME(offsetIndex))));
-          rir::offsetUnit::addMask(ouContainer, 0ul);
+          
+          // 
+          // Add mask
+          // 
+          rir::offsetUnit::addMask(ouContainer, p.getMask().toI());
 
+          if (p.getMask().toI() != 0) {
+            functionsMasked++;
+          }
+
+          // 
+          // Populate the context units in the relavant offsets inside the offset unit
+          // 
           p.populateOffsetUnit(ouContainer);
 
+          // 
+          // Add the offset unit to the deserializer data.
+          // 
           rir::generalUtil::addSEXP(ddContainer, ouContainer, ddIdx);
           UNPROTECT(1);
 
@@ -198,11 +235,22 @@ static void iterateOverMetadatasInDirectory() {
 
         saveDMetaAndCopyFiles(ddContainer, fName);
 
-        testSavedDMeta(fName);
+        // testSavedDMeta(fName);
 
         UNPROTECT(protecc + 2);
       }
     }
+
+    SerializedDataProcessor::printStats(0);
+
+    printSpace(0);
+    std::cout << "Functions Unique          : " << functionsSeen << std::endl;
+    
+    printSpace(0);
+    std::cout << "Functions (>1) Contexts   : " << functionsWithMoreThanOneContext << std::endl;
+    printSpace(0);
+    std::cout << "Functions Masked          : " << functionsMasked << std::endl;
+  
   } else {
     std::cerr << "\"" << inputPath << "\" has no metas, nothing to process" << std::endl;
     exit(EXIT_FAILURE);
@@ -247,8 +295,8 @@ int main(int argc, char** argv) {
   outputPath = argv[3];
 
   std::cout << "[OBAP Started]" << std::endl;
-  std::cout << "Raw Bitcodes Folder: " << inputPath << std::endl;
-  std::cout << "Processed Bitcodes Folder: " << outputPath << std::endl;
+  std::cout << "Raw Bitcodes Folder       : " << inputPath << std::endl;
+  std::cout << "Processed Bitcodes Folder : " << outputPath << std::endl;
 
   std::cout.setstate(std::ios_base::failbit);
   int fd = supress_stdout();

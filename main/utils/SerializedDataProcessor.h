@@ -15,7 +15,7 @@ class SerializedDataProcessor {
   typedef std::unordered_map<unsigned long, std::vector<std::pair<SEXP, SEXP>>> ContextWiseData;
   
   public:
-    SerializedDataProcessor(SEXP cData, const std::string & pathPrefix) : _cData(cData), _pathPrefix(pathPrefix) {}
+    SerializedDataProcessor(SEXP cData, const std::string & pathPrefix) : _cData(cData), _pathPrefix(pathPrefix), _mask(0ul) {}
 
     // Iterate over all contexts
     //  1. For each context context perform TV reduction
@@ -27,11 +27,30 @@ class SerializedDataProcessor {
     // Prints the final results of processing
     void print(const unsigned int & space);
 
+    // Prints the final results of processing
+    static void printStats(const unsigned int & space);
+
+    unsigned int getOrigContextsCount() {
+      return _origContextWiseData.size();
+    }
+
     // Populate the deserializer metadata
     void populateOffsetUnit(SEXP ouContainer);
 
     // Number of contexts
     unsigned int getNumContexts();
+
+    
+    static size_t bitcodesSeen;
+    static size_t bitcodesDeprecated;
+    static unsigned int stirctComparisons;
+    static unsigned int roughEQComparisons;
+    static unsigned int roughNEQComparisons;
+    static unsigned int TVCases;
+
+    rir::Context getMask() {
+      return _mask;
+    }
 
   private:
     SEXP _cData;
@@ -40,11 +59,14 @@ class SerializedDataProcessor {
     unsigned int _deprecatedContexts = 0;
     unsigned int _deprecatedBitcodes = 0;
 
+    rir::Context _mask;
+
     // Iterates over (epoch, cData)
     void iterateOverContextWiseData(ContextWiseData & cwd, std::function<void(SEXP, SEXP)> f);
 
     ContextWiseData _origContextWiseData;
     ContextWiseData _reducedContextWiseData;
+    ContextWiseData _curbedAndReducedContextWiseData;
 
     std::unordered_map<unsigned long, TVGraph> _tvGraphData;
 

@@ -20,6 +20,14 @@
 
 #define PRINT_REPRESENTATIVE_SELECTION_NON_TRIVIAL_CASES 0
 
+
+size_t SerializedDataProcessor::bitcodesSeen = 0;
+size_t SerializedDataProcessor::bitcodesDeprecated = 0;
+unsigned int SerializedDataProcessor::stirctComparisons = 0;
+unsigned int SerializedDataProcessor::roughEQComparisons = 0;
+unsigned int SerializedDataProcessor::roughNEQComparisons = 0;
+unsigned int SerializedDataProcessor::TVCases = 0;
+
 unsigned int SerializedDataProcessor::getNumContexts() {
   return _reducedContextWiseData.size();
 }
@@ -59,8 +67,9 @@ void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
       rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
       UNPROTECT(1);
 
-    } 
-    else if (_tvGraphData.find(ele.first) != _tvGraphData.end()) {
+    } else if (_tvGraphData.find(ele.first) != _tvGraphData.end()) {
+
+      TVCases++;
 
       TVGraph tvg = _tvGraphData[ele.first];
       auto numTypeVersions = tvg.getNumTypeVersions();
@@ -73,6 +82,7 @@ void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
 
           // If number of type versions is one and the number of binaries is also one, V = 0
           if (nodeRes.size() == 1) {
+
             SEXP cuContainer;
             PROTECT(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(1)));
             rir::contextUnit::addContext(cuContainer, ele.first);
@@ -272,6 +282,8 @@ void SerializedDataProcessor::init() {
       }
 
       std::vector<std::pair<SEXP, SEXP>> similars;
+
+      // Atlease one element will be there as its similar to itself.
       similars.push_back(cDataVec[i]);
       
       std::stringstream pref1;
@@ -386,6 +398,106 @@ void SerializedDataProcessor::init() {
     
   }
 
+  // 
+  // 4. Context Curbing
+  // 
+
+  std::vector<unsigned long> contextsWithOneBinary;
+
+  std::set<unsigned long> redundantContexts;
+
+  for (auto & ele : _reducedContextWiseData) {
+    if (ele.second.size() == 1) {
+      contextsWithOneBinary.push_back(ele.first);
+    }
+  }
+
+  for (int i = 0; i < contextsWithOneBinary.size(); i++) {
+
+    auto currC1 = contextsWithOneBinary[i];
+    
+    // We know there is only one element
+    std::pair<SEXP, SEXP> c1Ele = _reducedContextWiseData[currC1][0];
+
+    std::stringstream pref1;
+    pref1 << _pathPrefix << CHAR(PRINTNAME(c1Ele.first));
+    OBAHolder r1(pref1.str(), c1Ele.second);
+
+    for (int j = i + 1; j < contextsWithOneBinary.size(); j++) {
+
+      auto currC2 = contextsWithOneBinary[j];
+
+      // We know there is only one element
+      std::pair<SEXP, SEXP> c2Ele = _reducedContextWiseData[currC2][0];
+
+      std::stringstream pref2;
+      pref2 << _pathPrefix << CHAR(PRINTNAME(c2Ele.first));
+      OBAHolder r2(pref2.str(), c2Ele.second);
+
+      auto cRes = r1.equals(r2);
+      bool argSimilar = cRes.argEffectResult <= 2;
+      
+      if (cRes.similar && argSimilar) {
+        // The two context binaries are similar, now curb them
+
+        auto currCon = rir::Context(currC1);
+        auto other = rir::Context(currC2);
+        
+        // 
+        // Strictly comparable
+        // 
+        // We will be able to deprecate contexts only in this case
+        // 
+        if (other.smaller(currCon)) {
+          // Here other is more specialized than currCon
+          redundantContexts.insert(other.toI());
+          _mask.addMaskC1MinusC2(other, currCon);
+
+          stirctComparisons++;
+          
+        } else if (currCon.smaller(other)) { 
+          // Here currCon is more specialized than other
+          redundantContexts.insert(currCon.toI());
+          _mask.addMaskC1MinusC2(currCon, other);
+        
+          stirctComparisons++;
+        }
+        // Roughly comparable - EQ
+        else if (other.roughlySmaller(currCon) && currCon.roughlySmaller(other)) {
+          // Trivial case, generate mask
+          _mask.addMaskC1UQUC2(currCon, other);
+          
+          roughEQComparisons++;
+        }
+        // Roughlt comparable - NEQ
+        else if (other.roughlySmaller(currCon)) {
+          _mask.addMaskC1TYPC2(other, currCon);
+
+          roughNEQComparisons++;
+          
+        } else if (currCon.roughlySmaller(other)) {
+          _mask.addMaskC1TYPC2(currCon, other);
+
+          roughNEQComparisons++;
+        }
+
+        // // We only deprecate if one is dispatchable in the absence of other, if they are exclusive we might run into theoretical worst case where
+        // // optimistic unlock never happens
+        // if (std::includes(r1.reqMap.begin(), r1.reqMap.end(), r2.reqMap.begin(), r2.reqMap.end()) || 
+        //     std::includes(r2.reqMap.begin(), r2.reqMap.end(), r1.reqMap.begin(), r1.reqMap.end())) {
+        //   removed.push_back(j);
+        
+        // }
+      }
+
+    }
+    
+  }
+
+
+  // Collect stats
+  bitcodesSeen += _origBitcodes;
+  bitcodesDeprecated += _deprecatedBitcodes;
 }
 
 
@@ -456,4 +568,23 @@ void SerializedDataProcessor::print(const unsigned int & space) {
 
   printSpace(space);
   std::cout << "===============================" << std::endl;
+}
+
+
+void SerializedDataProcessor::printStats(const unsigned int & space) {
+  printSpace(space);
+  std::cout << "Total seen                : " << bitcodesSeen << std::endl;
+  printSpace(space);
+  std::cout << "Deprecated                : " << bitcodesDeprecated << std::endl;
+
+  printSpace(space);
+  std::cout << "Strict                    : " << stirctComparisons << std::endl;
+  printSpace(space);
+  std::cout << "Rough EQ                  : " << roughEQComparisons << std::endl;
+  printSpace(space);
+  std::cout << "Rough NEQ                 : " << roughNEQComparisons << std::endl;
+
+  printSpace(space);
+  std::cout << "TVCases                   : " << TVCases << std::endl;
+
 }
