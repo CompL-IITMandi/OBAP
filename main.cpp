@@ -22,6 +22,8 @@
 #include <functional>
 #include <sstream>
 
+#include "R/Protect.h"
+
 std::string outputPath;
 std::string inputPath;
 
@@ -30,7 +32,6 @@ static void saveDMetaAndCopyFiles(SEXP ddContainer, const std::string & metaFile
 
   outFilePath << outputPath << "/" << metaFilename << "d";
 
-  R_outpstream_st outputStream;
   FILE *fptr;
   fptr = fopen(outFilePath.str().c_str(),"w");
   if (!fptr) {
@@ -47,8 +48,7 @@ static void saveDMetaAndCopyFiles(SEXP ddContainer, const std::string & metaFile
     }
   }
   
-  R_InitFileOutPStream(&outputStream,fptr,R_pstream_binary_format, 0, NULL, R_NilValue);
-  R_Serialize(ddContainer, &outputStream);
+  R_SaveToFile(ddContainer, fptr, 0);
   fclose(fptr);
 
   // Copy all relavant binaries
@@ -106,12 +106,12 @@ static void testSavedDMeta(const std::string & metaFilename) {
   R_inpstream_st inputStream;
   R_InitFileInPStream(&inputStream, reader, R_pstream_binary_format, NULL, R_NilValue);
 
+  rir::Protect protecc;
   SEXP ddContainer;
-  PROTECT(ddContainer = R_Unserialize(&inputStream));
+  protecc(ddContainer= R_LoadFromFile(reader, 0));
+  fclose(reader);
 
   // rir::deserializerData::print(ddContainer, 2);
-
-  UNPROTECT(1);
 }
 
 static void iterateOverMetadatasInDirectory() {
@@ -146,29 +146,25 @@ static void iterateOverMetadatasInDirectory() {
           }
         }
 
-        // Initialize the deserializing stream
-        R_inpstream_st inputStream;
-        R_InitFileInPStream(&inputStream, reader, R_pstream_binary_format, NULL, R_NilValue);
 
         SEXP serDataContainer;
-        PROTECT(serDataContainer = R_Unserialize(&inputStream));
-
-        unsigned int protecc = 0;
-        // rir::serializerData::recursivelyProtect(serDataContainer);
-
-        // printSpace(0);
-        // std::cout << "Processing: " << fName << std::endl;
-        // printSpace(2);
-        // std::cout << "FunctionName: " << CHAR(PRINTNAME(rir::serializerData::getName(serDataContainer))) << std::endl;
-
+        rir::Protect protecc;
+        protecc(serDataContainer= R_LoadFromFile(reader, 0));
         fclose(reader);
+
+        printSpace(0);
+        std::cout << "Processing: " << fName << std::endl;
+        printSpace(2);
+        std::cout << "FunctionName: " << CHAR(PRINTNAME(rir::serializerData::getName(serDataContainer))) << std::endl;
+
+        rir::serializerData::print(serDataContainer, 0);
 
         // Get serialized metadata
         REnvHandler offsetMapHandler(rir::serializerData::getBitcodeMap(serDataContainer));
 
         int numOffsets = offsetMapHandler.size();
         SEXP ddContainer;
-        PROTECT(ddContainer = Rf_allocVector(VECSXP, rir::deserializerData::getContainerSize(numOffsets)));
+        protecc(ddContainer = Rf_allocVector(VECSXP, rir::deserializerData::getContainerSize(numOffsets)));
         rir::deserializerData::addHast(ddContainer, rir::serializerData::getHast(serDataContainer));
                 
         int ddIdx = rir::deserializerData::offsetsStartingIndex();
@@ -201,7 +197,8 @@ static void iterateOverMetadatasInDirectory() {
           // Create a offset unit that contains the desired number of contexts
           // 
           SEXP ouContainer;
-          PROTECT(ouContainer = Rf_allocVector(VECSXP, rir::offsetUnit::getContainerSize(p.getNumContexts())));
+          rir::Protect protecc1;
+          protecc1(ouContainer = Rf_allocVector(VECSXP, rir::offsetUnit::getContainerSize(p.getNumContexts())));
           
           // 
           // Add Offset idx
@@ -226,18 +223,14 @@ static void iterateOverMetadatasInDirectory() {
           // Add the offset unit to the deserializer data.
           // 
           rir::generalUtil::addSEXP(ddContainer, ouContainer, ddIdx);
-          UNPROTECT(1);
 
           ddIdx++;
         });
         
         // rir::deserializerData::print(ddContainer, 2);
-
         saveDMetaAndCopyFiles(ddContainer, fName);
-
         // testSavedDMeta(fName);
 
-        UNPROTECT(protecc + 2);
       }
     }
 

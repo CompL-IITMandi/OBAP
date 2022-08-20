@@ -44,15 +44,17 @@ void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
     // Case: V = 0, Just one binary
     if (ele.second.size() == 1) {
 
+      rir::Protect protecc;
+
       SEXP cuContainer;
-      PROTECT(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(1)));
+      protecc(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(1)));
       rir::contextUnit::addContext(cuContainer, ele.first);
       rir::contextUnit::addVersioning(cuContainer, 0);
       rir::contextUnit::addTFSlots(cuContainer, R_NilValue);
 
       std::pair<SEXP, SEXP> data = ele.second[0];
       SEXP buContainer;
-      PROTECT(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
+      protecc(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
       rir::binaryUnit::addEpoch(buContainer, data.first);
       rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
       rir::binaryUnit::addTVData(buContainer, R_NilValue);
@@ -61,11 +63,9 @@ void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
       // Add Binary unit to Context unit
       rir::generalUtil::addSEXP(cuContainer, buContainer, rir::contextUnit::binsStartingIndex());
 
-      UNPROTECT(1);
 
       // Add Context unit to Offset unit
       rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
-      UNPROTECT(1);
 
     } else if (_tvGraphData.find(ele.first) != _tvGraphData.end()) {
 
@@ -83,15 +83,17 @@ void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
           // If number of type versions is one and the number of binaries is also one, V = 0
           if (nodeRes.size() == 1) {
 
+            rir::Protect protecc;
+
             SEXP cuContainer;
-            PROTECT(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(1)));
+            protecc(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(1)));
             rir::contextUnit::addContext(cuContainer, ele.first);
             rir::contextUnit::addVersioning(cuContainer, 0);
             rir::contextUnit::addTFSlots(cuContainer, R_NilValue);
 
             std::pair<SEXP, SEXP> data = nodeRes[0];
             SEXP buContainer;
-            PROTECT(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
+            protecc(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
             rir::binaryUnit::addEpoch(buContainer, data.first);
             rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
             rir::binaryUnit::addTVData(buContainer, R_NilValue);
@@ -99,16 +101,16 @@ void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
             // Add Binary unit to Context unit
             rir::generalUtil::addSEXP(cuContainer, buContainer, rir::contextUnit::binsStartingIndex());
 
-            UNPROTECT(1);
 
             // Add Context unit to Offset unit
             rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
-            UNPROTECT(1);
           } else {
+
+            rir::Protect protecc;
 
             // If number of type versions is one and the number of binaries is > 1, V = 1
             SEXP cuContainer;
-            PROTECT(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(nodeRes.size())));
+            protecc(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(nodeRes.size())));
             rir::contextUnit::addContext(cuContainer, ele.first);
             rir::contextUnit::addVersioning(cuContainer, 1);
             rir::contextUnit::addTFSlots(cuContainer, R_NilValue);
@@ -116,7 +118,9 @@ void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
             int startIdx = rir::contextUnit::binsStartingIndex();
             for (auto & data : nodeRes) {
               SEXP buContainer;
-              PROTECT(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
+              rir::Protect protecc1;
+
+              protecc1(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
               rir::binaryUnit::addEpoch(buContainer, data.first);
               rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
               rir::binaryUnit::addTVData(buContainer, R_NilValue);
@@ -124,19 +128,18 @@ void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
               // Add Binary unit to Context unit
               rir::generalUtil::addSEXP(cuContainer, buContainer, startIdx);
               startIdx++;
-              UNPROTECT(1);
             }
 
             // Add Context unit to Offset unit
             rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
-            UNPROTECT(1);
 
           }
           
         });
       } else {
+        rir::Protect protecc;
         SEXP cuContainer;
-        PROTECT(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(tvg.getBinariesCount())));
+        protecc(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(tvg.getBinariesCount())));
         rir::contextUnit::addContext(cuContainer, ele.first);
         
         rir::contextUnit::addVersioning(cuContainer, 2);
@@ -149,7 +152,8 @@ void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
           auto nodeRes = node.get();
           for (auto & data : nodeRes) {
             SEXP buContainer;
-            PROTECT(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
+            rir::Protect protecc1;
+            protecc1(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
             rir::binaryUnit::addEpoch(buContainer, data.first);
             rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
             rir::binaryUnit::addTVData(buContainer, slotData);
@@ -157,13 +161,11 @@ void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
             // Add Binary unit to Context unit
             rir::generalUtil::addSEXP(cuContainer, buContainer, startIdx);
             startIdx++;
-            UNPROTECT(1);
           }
         });
 
         // Add Context unit to Offset unit
         rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
-        UNPROTECT(1);
       }
     } else {
       Rf_error("Invalid case while creating deserializer unit!");

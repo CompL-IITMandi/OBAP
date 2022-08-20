@@ -8,6 +8,8 @@
 
 #include "Rinternals.h"
 
+#include "R/Protect.h"
+
 // #include "interpreter/instance.h"
 // #include "utils/Pool.h"
 class REnvHandler {
@@ -107,8 +109,9 @@ class REnvHandler {
 
     // iterator
     void iterate(const std::function< void(SEXP, SEXP) >& callback) {
+      rir::Protect protecc;
       SEXP offsetBindings = R_lsInternal(_container, (Rboolean) false);
-      PROTECT(offsetBindings);
+      protecc(offsetBindings);
       for (int i = 0; i < Rf_length(offsetBindings); i++) {
         // offsetBindings = R_lsInternal(_container, (Rboolean) false);
         SEXP key = Rf_install(CHAR(STRING_ELT(offsetBindings, i)));
@@ -117,7 +120,6 @@ class REnvHandler {
         if (binding == R_UnboundValue) continue;
         callback(key, binding);
       }
-      UNPROTECT(1);
     }
 
 

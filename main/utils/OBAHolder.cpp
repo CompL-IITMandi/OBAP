@@ -13,6 +13,8 @@
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "R/Protect.h"
+
 #define DEBUG_ANALYSIS_RESULTS 0
 #define DEBUG_SPACE 8
 #define DEBUG_ARG_EFFECT_ANALYSIS 0
@@ -74,6 +76,7 @@ static std::set<std::string> getReqMapAsCppSet(SEXP rData) {
 
 
 void OBAHolder::init() {
+  rir::Protect protecc;
   std::stringstream bitcodePath, poolPath;
   bitcodePath << _pathPrefix << ".bc";
   poolPath    << _pathPrefix << ".pool";
@@ -95,18 +98,11 @@ void OBAHolder::init() {
     }
   }
 
-  // Initialize the deserializing stream
-  R_inpstream_st inputStream;
-  R_InitFileInPStream(&inputStream, reader, R_pstream_binary_format, NULL, R_NilValue);
-
   SEXP poolDataContainer;
-  PROTECT(poolDataContainer = R_Unserialize(&inputStream));
+
+  protecc(poolDataContainer = R_LoadFromFile(reader, 0));
 
   reqMap = getReqMapAsCppSet(rir::contextData::getReqMapAsVector(_cData));
-
-  unsigned int protecc = 0;
-  // rir::SerializedPool::recursivelyProtect(poolDataContainer);  
-
 
   fclose(reader);
 
@@ -131,11 +127,6 @@ void OBAHolder::init() {
   storeWeightAnalysis(MM);
   storeArgEffectAnalysis(MM);
   storeFunCallBFAnalysis(MM);
-
-  UNPROTECT(protecc + 1);
-
-  
-
 }
 
 // 1. Weight Analysis Result
