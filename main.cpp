@@ -152,12 +152,12 @@ static void iterateOverMetadatasInDirectory() {
         protecc(serDataContainer= R_LoadFromFile(reader, 0));
         fclose(reader);
 
-        printSpace(0);
-        std::cout << "Processing: " << fName << std::endl;
-        printSpace(2);
-        std::cout << "FunctionName: " << CHAR(PRINTNAME(rir::serializerData::getName(serDataContainer))) << std::endl;
+        // printSpace(0);
+        // std::cout << "Processing: " << fName << std::endl;
+        // printSpace(2);
+        // std::cout << "FunctionName: " << CHAR(PRINTNAME(rir::serializerData::getName(serDataContainer))) << std::endl;
 
-        rir::serializerData::print(serDataContainer, 0);
+        // rir::serializerData::print(serDataContainer, 0);
 
         // Get serialized metadata
         REnvHandler offsetMapHandler(rir::serializerData::getBitcodeMap(serDataContainer));
