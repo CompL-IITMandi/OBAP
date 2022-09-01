@@ -74,6 +74,9 @@ file(GLOB_RECURSE SRC "main/runtime/*.cpp" "main/opt/*.cpp" "main/rir/*.cpp" "ma
 
 add_executable(${PROJECT_NAME} main.cpp ${SRC})
 
+add_executable(deprecator deprecator.cpp ${SRC})
+
+
 find_library(LIB_R NAMES "libR.so" PATHS ${R_BUILD}/lib NO_DEFAULT_PATH)
 find_library(LIB_RBLAS NAMES "libRblas.so" PATHS ${R_BUILD}/lib NO_DEFAULT_PATH)
 find_library(LIB_RLAPACK NAMES "libRlapack.so" PATHS ${R_BUILD}/lib NO_DEFAULT_PATH)
@@ -86,8 +89,15 @@ target_link_libraries(${PROJECT_NAME} ${LIB_R})
 target_link_libraries(${PROJECT_NAME} ${LIB_RBLAS})
 target_link_libraries(${PROJECT_NAME} ${LIB_RLAPACK})
 
+
+target_link_libraries(deprecator ${LIB_R})
+target_link_libraries(deprecator ${LIB_RBLAS})
+target_link_libraries(deprecator ${LIB_RLAPACK})
+
+
 # Link LLVM libraries
 if (DEFINED LLVM_PACKAGE_VERSION)
   llvm_map_components_to_libnames(LLVM_LIBS ${LLVM_COMPONENTS_USED})
   target_link_libraries(${PROJECT_NAME} ${LLVM_LIBS})
+  target_link_libraries(deprecator ${LLVM_LIBS})
 endif(DEFINED LLVM_PACKAGE_VERSION)

@@ -10,3 +10,5 @@ runTest.sh
 
 out*
 b.sh
+
+deprecate.sh

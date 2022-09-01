@@ -35,4 +35,8 @@ cd $cwd
 
 echo "LD_LIBRARY_PATH=$3/lib/ R_HOME=$3 $1/bcp --no-save \$1 \$2" > run.sh
 chmod +x run.sh
+
+echo "LD_LIBRARY_PATH=$3/lib/ R_HOME=$3 $1/deprecator --no-save \$1 \$2" > deprecate.sh
+chmod +x deprecate.sh
+
 exit
