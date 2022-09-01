@@ -20,4 +20,5 @@ echo "Hast: $hast"
 dmeta=`ls $bitcodesPath/*${hast}*.metad`
 echo "Dmeta: $dmeta"
 
-/home/meetesh/BUILDS/OBAP/deprecate.sh $dmeta $smallestBitcode
+# /home/meetesh/BUILDS/OBAP/deprecate.sh $dmeta $smallestBitcode
+/opt/OBAP/deprecate.sh $dmeta $smallestBitcode
