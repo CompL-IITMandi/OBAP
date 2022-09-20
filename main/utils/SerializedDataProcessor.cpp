@@ -257,6 +257,9 @@ void SerializedDataProcessor::init() {
   // 
   // 2. Contextwise binary reduction
   // 
+
+  bool skipBinaryReduction = getenv("SKIP_CONTEXTWISE_REDUCTION") ? getenv("SKIP_CONTEXTWISE_REDUCTION")[0] == '1' : false;
+
   #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 0
   printSpace(6);
   std::cout << "=== CONTEXTWISE SIMILARITY CHECK ===" << std::endl;
@@ -302,6 +305,7 @@ void SerializedDataProcessor::init() {
         if (std::find(removed.begin(), removed.end(), j) != removed.end()) {
           continue;
         }
+
         std::stringstream pref2;
         pref2 << _pathPrefix << CHAR(PRINTNAME(cDataVec[j].first));
         OBAHolder r2(pref2.str(), cDataVec[j].second);
@@ -321,7 +325,7 @@ void SerializedDataProcessor::init() {
         printSpace(8);
         std::cout << "(" << i << "," << j << ")";
         #endif
-        if (cRes.similar && argSimilar) {
+        if (skipBinaryReduction == false && cRes.similar && argSimilar) {
           // We only deprecate if one is dispatchable in the absence of other, if they are exclusive we might run into theoretical worst case where
           // optimistic unlock never happens
           if (std::includes(r1.reqMap.begin(), r1.reqMap.end(), r2.reqMap.begin(), r2.reqMap.end()) || 
