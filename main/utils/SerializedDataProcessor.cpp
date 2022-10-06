@@ -408,15 +408,19 @@ void SerializedDataProcessor::init() {
   // 4. Context Curbing
   // 
 
-  std::vector<unsigned long> contextsWithOneBinary;
+  bool skipContextMasking = getenv("SKIP_CONTEXT_MASKING") ? getenv("SKIP_CONTEXT_MASKING")[0] == '1' : false;
 
+  std::vector<unsigned long> contextsWithOneBinary;
   std::set<unsigned long> redundantContexts;
 
-  for (auto & ele : _reducedContextWiseData) {
-    if (ele.second.size() == 1) {
-      contextsWithOneBinary.push_back(ele.first);
+  if (!skipContextMasking) {
+    for (auto & ele : _reducedContextWiseData) {
+      if (ele.second.size() == 1) {
+        contextsWithOneBinary.push_back(ele.first);
+      }
     }
   }
+
 
   for (int i = 0; i < contextsWithOneBinary.size(); i++) {
 
