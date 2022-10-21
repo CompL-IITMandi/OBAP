@@ -23,10 +23,13 @@
 
 size_t SerializedDataProcessor::bitcodesSeen = 0;
 size_t SerializedDataProcessor::bitcodesDeprecated = 0;
+unsigned int SerializedDataProcessor::binariesWithScopeForReduction = 0;
 unsigned int SerializedDataProcessor::stirctComparisons = 0;
 unsigned int SerializedDataProcessor::roughEQComparisons = 0;
 unsigned int SerializedDataProcessor::roughNEQComparisons = 0;
 unsigned int SerializedDataProcessor::TVCases = 0;
+
+unsigned int SerializedDataProcessor::overallTotalTV = 0;
 
 unsigned int SerializedDataProcessor::getNumContexts() {
   return _reducedContextWiseData.size();
@@ -69,7 +72,7 @@ void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
 
     } else if (_tvGraphData.find(ele.first) != _tvGraphData.end()) {
 
-      TVCases++;
+      // TVCases++;
 
       TVGraph tvg = _tvGraphData[ele.first];
       auto numTypeVersions = tvg.getNumTypeVersions();
@@ -239,12 +242,58 @@ static std::pair<SEXP, SEXP> chooseRepresentative(std::vector<std::pair<SEXP, SE
     }
   }
   #endif
-
-
-
   return representative;
 
 }
+
+static std::pair<SEXP, SEXP> chooseRepresentativeRev(std::vector<std::pair<SEXP, SEXP>> possibilities) {
+  std::pair<SEXP, SEXP> representative;
+
+  int currMax = -1;
+
+  for (unsigned int i = 0; i < possibilities.size(); i++) {
+    SEXP cData = possibilities[i].second;
+    SEXP rData = rir::contextData::getReqMapAsVector(cData);
+    int size = Rf_length(rData);
+
+    // First case, C++ pleae optimize this, unroll and magic!
+    if (currMax == -1) {
+      representative.first = possibilities[i].first;
+      representative.second = possibilities[i].second;
+      currMax = size;
+      continue;
+    }
+
+    // Update current min
+    if (size > currMax) {
+      representative.first = possibilities[i].first;
+      representative.second = possibilities[i].second;
+      currMax = size;
+    }
+  }
+  return representative;
+
+}
+
+
+static std::pair<SEXP, SEXP> chooseLastSeen(std::vector<std::pair<SEXP, SEXP>> possibilities) {
+  std::pair<SEXP, SEXP> representative;
+
+  int currMaxEpoch = 0;
+
+  for (unsigned int i = 0; i < possibilities.size(); i++) {
+    SEXP epoch = possibilities[i].first;
+    unsigned long currEpoch = std::stoul(CHAR(PRINTNAME(epoch)));
+
+    if (currEpoch > currMaxEpoch) {
+      currMaxEpoch = currEpoch;
+      representative.first = possibilities[i].first;
+      representative.second = possibilities[i].second;
+    }
+  }
+  return representative;
+}
+
 
 
 void SerializedDataProcessor::init() {
@@ -269,104 +318,146 @@ void SerializedDataProcessor::init() {
     _origContextWiseData[con].push_back(std::pair<SEXP, SEXP>(epochSym, cData));
   });
 
+  // Count binaries that have scope for reduction
+  for (auto & ele : _origContextWiseData) {
+    if (ele.second.size() > 1) {
+      binariesWithScopeForReduction += ele.second.size();
+    }
+  }
+
+
   // 
   // 2. Contextwise binary reduction
   // 
 
   bool skipBinaryReduction = getenv("SKIP_CONTEXTWISE_REDUCTION") ? getenv("SKIP_CONTEXTWISE_REDUCTION")[0] == '1' : false;
 
-  #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 0
-  printSpace(6);
-  std::cout << "=== CONTEXTWISE SIMILARITY CHECK ===" << std::endl;
-  #endif
-  for (auto & ele : _origContextWiseData) {
-    unsigned long con = ele.first;
-    std::vector<std::pair<SEXP, SEXP>> cDataVec = ele.second;
+  int dumbOBAP = getenv("DUMBOBAP") ? std::stoi(getenv("DUMBOBAP")) : 0;
 
-    #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 0
-    printSpace(8);
-    std::cout << "Context(" << con << "): " << cDataVec.size() << " binaries" << std::endl;
-    #endif
+  // 
+  // DUMB OBAP SETTINGS
+  //  0 -> OFF
+  //  1 -> Only last seen
+  //  2 -> One with smallest requirement map
+  //  3 -> One with largest requirement map
+  // 
 
-    // Prefix  : HAST_OFFSET_EPOCH
-    // Bitcode : Prefix.bc
-    // Pool    : Prefix.pool
+  if (dumbOBAP > 0) {
 
-    // std::cout << "Context check" << std::endl;
-
-    std::vector<unsigned int> removed;
-    std::vector<std::pair<SEXP, SEXP>> groups;
-    for (unsigned int i = 0; i < cDataVec.size(); i++) {
-      if (std::find(removed.begin(), removed.end(), i) != removed.end()) {
-        continue;
+    for (auto & ele : _origContextWiseData) {
+      unsigned long con = ele.first;
+      switch(dumbOBAP) {
+        case 1: {
+          _reducedContextWiseData[con].push_back(chooseLastSeen(ele.second));
+          break;
+        }
+        case 2: {
+          _reducedContextWiseData[con].push_back(chooseRepresentative(ele.second));
+          break;
+        }
+        case 3: {
+          _reducedContextWiseData[con].push_back(chooseRepresentativeRev(ele.second));
+          break;
+        }
+        default: {}
       }
+    }
 
-      std::vector<std::pair<SEXP, SEXP>> similars;
+  } else {
+    #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 0
+    printSpace(6);
+    std::cout << "=== CONTEXTWISE SIMILARITY CHECK ===" << std::endl;
+    #endif
+    for (auto & ele : _origContextWiseData) {
+      unsigned long con = ele.first;
+      std::vector<std::pair<SEXP, SEXP>> cDataVec = ele.second;
 
-      // Atlease one element will be there as its similar to itself.
-      similars.push_back(cDataVec[i]);
-      
-      std::stringstream pref1;
-      pref1 << _pathPrefix << CHAR(PRINTNAME(cDataVec[i].first));
-      OBAHolder r1(pref1.str(), cDataVec[i].second);
-
-      #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
+      #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 0
       printSpace(8);
-      std::cout << "(" << i << ")" << std::endl;
-      r1.print(8);
+      std::cout << "Context(" << con << "): " << cDataVec.size() << " binaries" << std::endl;
       #endif
 
-      for (unsigned int j = i + 1; j < cDataVec.size(); j++) {
-        if (std::find(removed.begin(), removed.end(), j) != removed.end()) {
+      // Prefix  : HAST_OFFSET_EPOCH
+      // Bitcode : Prefix.bc
+      // Pool    : Prefix.pool
+
+      // std::cout << "Context check" << std::endl;
+
+      std::vector<unsigned int> removed;
+      std::vector<std::pair<SEXP, SEXP>> groups;
+      for (unsigned int i = 0; i < cDataVec.size(); i++) {
+        if (std::find(removed.begin(), removed.end(), i) != removed.end()) {
           continue;
         }
 
-        std::stringstream pref2;
-        pref2 << _pathPrefix << CHAR(PRINTNAME(cDataVec[j].first));
-        OBAHolder r2(pref2.str(), cDataVec[j].second);
+        std::vector<std::pair<SEXP, SEXP>> similars;
 
-        // std::cout << "numArguments: " << (r1.getFS().numArguments == r2.getFS().numArguments) << std::endl;
-
-        #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
-        printSpace(10);
-        std::cout << "(" << i << "," << j << ")" << std::endl;
-        r2.print(10);
-        #endif
-
-        auto cRes = r1.equals(r2);
-        bool argSimilar = cRes.argEffectResult <= 2;
+        // Atlease one element will be there as its similar to itself.
+        similars.push_back(cDataVec[i]);
         
+        std::stringstream pref1;
+        pref1 << _pathPrefix << CHAR(PRINTNAME(cDataVec[i].first));
+        OBAHolder r1(pref1.str(), cDataVec[i].second);
+
         #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
         printSpace(8);
-        std::cout << "(" << i << "," << j << ")";
+        std::cout << "(" << i << ")" << std::endl;
+        r1.print(8);
         #endif
-        if (skipBinaryReduction == false && cRes.similar && argSimilar) {
-          // We only deprecate if one is dispatchable in the absence of other, if they are exclusive we might run into theoretical worst case where
-          // optimistic unlock never happens
-          if (std::includes(r1.reqMap.begin(), r1.reqMap.end(), r2.reqMap.begin(), r2.reqMap.end()) || 
-              std::includes(r2.reqMap.begin(), r2.reqMap.end(), r1.reqMap.begin(), r1.reqMap.end())) {
-            removed.push_back(j);
-            _deprecatedBitcodes++;
 
-            similars.push_back(cDataVec[j]);
-
-            #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
-            std::cout << " [SIMILAR]";
-            #endif
+        for (unsigned int j = i + 1; j < cDataVec.size(); j++) {
+          if (std::find(removed.begin(), removed.end(), j) != removed.end()) {
+            continue;
           }
 
+          std::stringstream pref2;
+          pref2 << _pathPrefix << CHAR(PRINTNAME(cDataVec[j].first));
+          OBAHolder r2(pref2.str(), cDataVec[j].second);
+
+          // std::cout << "numArguments: " << (r1.getFS().numArguments == r2.getFS().numArguments) << std::endl;
+
+          #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
+          printSpace(10);
+          std::cout << "(" << i << "," << j << ")" << std::endl;
+          r2.print(10);
+          #endif
+
+          auto cRes = r1.equals(r2);
+          bool argSimilar = cRes.argEffectResult <= 2;
+          
+          #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
+          printSpace(8);
+          std::cout << "(" << i << "," << j << ")";
+          #endif
+          if (skipBinaryReduction == false && cRes.similar && argSimilar) {
+            // We only deprecate if one is dispatchable in the absence of other, if they are exclusive we might run into theoretical worst case where
+            // optimistic unlock never happens
+            if (std::includes(r1.reqMap.begin(), r1.reqMap.end(), r2.reqMap.begin(), r2.reqMap.end()) || 
+                std::includes(r2.reqMap.begin(), r2.reqMap.end(), r1.reqMap.begin(), r1.reqMap.end())) {
+              removed.push_back(j);
+              _deprecatedBitcodes++;
+
+              similars.push_back(cDataVec[j]);
+
+              #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
+              std::cout << " [SIMILAR]";
+              #endif
+            }
+
+          }
+
+          #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
+          std::cout << std::endl;
+          #endif
         }
 
-        #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
-        std::cout << std::endl;
-        #endif
+        auto representative = chooseRepresentative(similars);
+
+        _reducedContextWiseData[con].push_back(representative);
       }
-
-      auto representative = chooseRepresentative(similars);
-
-      _reducedContextWiseData[con].push_back(representative);
     }
   }
+
 
   // 
   // 3. Type versioning
@@ -381,6 +472,9 @@ void SerializedDataProcessor::init() {
     printSpace(8);
     std::cout << "Processing context(" << ele.first << "): " << ele.second.size() << std::endl;
     #endif
+
+    std::cout << "FOR CONTEXT(" << ele.first << "): " << std::endl;
+
     if (ele.second.size() > 1) {
       #if DEBUG_CONTEXTWISE_TYPE_VERSIONING > 0
       printSpace(8);
@@ -392,6 +486,8 @@ void SerializedDataProcessor::init() {
       if (!stat) {
         Rf_error("Init failed for TVGraph");
       }
+
+      overallTotalTV += g.getNumTypeVersions();
 
       _tvGraphData[ele.first] = g;
 
@@ -410,6 +506,7 @@ void SerializedDataProcessor::init() {
         #endif
       }
     } else {
+      std::cout << "NUMBER OF TYPE VERSIONS: NA (Only one binary)" << std::endl;
       #if DEBUG_CONTEXTWISE_TYPE_VERSIONING > 0
       printSpace(8);
       std::cout << "(*) TV not needed" << std::endl;
@@ -418,7 +515,6 @@ void SerializedDataProcessor::init() {
     
     
   }
-
   // 
   // 4. Context Curbing
   // 
@@ -600,7 +696,13 @@ void SerializedDataProcessor::printStats(const unsigned int & space) {
   printSpace(space);
   std::cout << "Total seen                : " << bitcodesSeen << std::endl;
   printSpace(space);
-  std::cout << "Deprecated                : " << bitcodesDeprecated << std::endl;
+  std::cout << "Total scope for reduction : " << binariesWithScopeForReduction << std::endl;
+
+  printSpace(space);
+  std::cout << "Binaries Reduced          : " << bitcodesDeprecated << std::endl;
+
+  printSpace(space);
+  std::cout << "overallTotalTV            : " << overallTotalTV << std::endl; 
 
   printSpace(space);
   std::cout << "Strict                    : " << stirctComparisons << std::endl;
@@ -609,7 +711,7 @@ void SerializedDataProcessor::printStats(const unsigned int & space) {
   printSpace(space);
   std::cout << "Rough NEQ                 : " << roughNEQComparisons << std::endl;
 
-  printSpace(space);
-  std::cout << "TVCases                   : " << TVCases << std::endl;
+  // printSpace(space);
+  // std::cout << "TVCases                   : " << TVCases << std::endl;
 
 }

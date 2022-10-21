@@ -42,11 +42,14 @@ class SerializedDataProcessor {
 
     
     static size_t bitcodesSeen;
+    static unsigned int binariesWithScopeForReduction;
     static size_t bitcodesDeprecated;
     static unsigned int stirctComparisons;
     static unsigned int roughEQComparisons;
     static unsigned int roughNEQComparisons;
     static unsigned int TVCases;
+
+    static unsigned int overallTotalTV;
 
     rir::Context getMask() {
       return _mask;
