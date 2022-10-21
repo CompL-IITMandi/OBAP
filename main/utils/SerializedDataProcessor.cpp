@@ -473,7 +473,7 @@ void SerializedDataProcessor::init() {
     std::cout << "Processing context(" << ele.first << "): " << ele.second.size() << std::endl;
     #endif
 
-    std::cout << "FOR CONTEXT(" << ele.first << "): " << std::endl;
+    // std::cout << "FOR CONTEXT(" << ele.first << "): " << std::endl;
 
     if (ele.second.size() > 1) {
       #if DEBUG_CONTEXTWISE_TYPE_VERSIONING > 0
@@ -506,7 +506,7 @@ void SerializedDataProcessor::init() {
         #endif
       }
     } else {
-      std::cout << "NUMBER OF TYPE VERSIONS: NA (Only one binary)" << std::endl;
+      // std::cout << "NUMBER OF TYPE VERSIONS: NA (Only one binary)" << std::endl;
       #if DEBUG_CONTEXTWISE_TYPE_VERSIONING > 0
       printSpace(8);
       std::cout << "(*) TV not needed" << std::endl;
