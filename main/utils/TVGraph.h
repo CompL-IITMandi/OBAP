@@ -15,6 +15,9 @@ using namespace std::chrono;
 
 #define DEBUG_WEIRD_CASES 0
 
+#define DEBUG_GENERAL_FEEDBACK_ADAPTER_IN 0
+#define DEBUG_GENERAL_FEEDBACK_ADAPTER_OUT 0
+
 // 
 // Helper Classes
 // ====================================================================================
@@ -340,19 +343,71 @@ class TVGraph {
       std::cout << "=====================" << std::endl;
     }
 
-    void iterateOverTVs(const std::function< void(std::vector<uint32_t>, TVNode) >& callback) {
+    void iterateOverTVs(const std::function< void(std::vector<uint32_t>, std::vector<SEXP>, TVNode) >& callback) {
+      rir::Protect protecc;
+      static SEXP invalidSym = Rf_install("Invalid!");
       auto soln = getSolutionSorted();
       for (unsigned int i = 0; i < typeVersions.size(); i++) {
         auto currTV = typeVersions[i];
 
-        std::vector<uint32_t> slotData;
+        std::vector<SEXP> generalSlotData;
+        std::vector<uint32_t> typeSlotData;
         for (auto & idx : soln) {
-          uint32_t curr = getFeedbackAsUint(currTV[idx]);
-          slotData.push_back(curr);
+          if (idx >= genericFeedbackLen) {
+            typeSlotData.push_back(getFeedbackAsUint(currTV[idx]));
+          } else {
+            auto currData = getFeedbackAsUint(currTV[idx]);
+            // Restore adapter data
+            if (currData == 0) {
+              generalSlotData.push_back(R_NilValue);
+              #if DEBUG_GENERAL_FEEDBACK_ADAPTER_OUT > 0
+              std::cout << "[ADAP OUT] NIL" << std::endl;
+              #endif
+            } else if (currData == 10) {
+              generalSlotData.push_back(R_dot_defined);
+              #if DEBUG_GENERAL_FEEDBACK_ADAPTER_OUT > 0
+              std::cout << "[ADAP OUT] T" << std::endl;
+              #endif
+            } else if (currData == 20) {
+              generalSlotData.push_back(R_dot_Method);
+              #if DEBUG_GENERAL_FEEDBACK_ADAPTER_OUT > 0
+              std::cout << "[ADAP OUT] F" << std::endl;
+              #endif
+            } else  {
+              SEXP currSEXP = getIndirectionByIndex(currData);
+              assert(currSEXP != invalidSym);
+              assert(TYPEOF(currSEXP) == SYMSXP);
+              
+              std::string currStr(CHAR(PRINTNAME(currSEXP)));
+              size_t start = currStr.find("_");
+              assert(start != std::string::npos);
+
+              SEXP hast = Rf_install(currStr.substr(0, start).c_str());
+              SEXP index;
+              
+              protecc(index = Rf_ScalarInteger(std::stoi(currStr.substr(start+1).c_str())));
+              
+              #if DEBUG_GENERAL_FEEDBACK_ADAPTER_OUT > 0
+              std::cout << "ORIGINAL  : " << CHAR(PRINTNAME(currSEXP)) << std::endl;
+              std::cout << "PROCESSED : (" << CHAR(PRINTNAME(hast)) << "," << Rf_asInteger(index) << ") " << std::endl;
+              #endif
+
+
+              // TODO UPDATE TO OTHER
+              SEXP store;
+              
+              protecc(store = Rf_allocVector(VECSXP, 2));
+              SET_VECTOR_ELT(store, 0, hast);
+              SET_VECTOR_ELT(store, 1, index);
+              
+              generalSlotData.push_back(store);
+            }
+            
+          }
         }
 
 
-        callback(slotData, nodes[i]);
+        callback(typeSlotData, generalSlotData, nodes[i]);
       }
     }
 
@@ -368,11 +423,18 @@ class TVGraph {
       return finalSolution;
     }
 
+    int genericFeedbackLen = -1;
+
   private:    
     typedef std::vector<rir::ObservedValues> TFVector;
     typedef std::pair<int, int> WorklistElement;
     typedef std::vector<std::pair<int, int>> Worklist;
     typedef std::set<int> SolutionBucket;
+
+    // Indirections to support additional type of feedbacks
+    // For convert [HAST, INDEX] -> HAST_INDEX symbol and assign a unique number to the same
+    std::unordered_map<SEXP, unsigned int> feedbackIndirections;
+    int indIdx = 30;
 
     bool solutionFound = false;
     SolutionBucket finalSolution;
@@ -409,12 +471,83 @@ class TVGraph {
       nodes[idx].addNode(cData);
     }
 
+    SEXP getIndirectionByIndex(unsigned int idx) {
+      for (auto & ele : feedbackIndirections) {
+        if (ele.second == idx) {
+          return ele.first;
+        }
+      }
+      return Rf_install("Invalid!");
+    }
+
 
     // 
     // Takes a contextData SEXP object and returns std::vector<rir::ObservedValues>
     // 
     inline TFVector getFeedbackAsVector(SEXP cData) {
       TFVector res;
+
+      // Use simple indirection to do slot selection, can patch it back later
+      SEXP otherFeedbackContainer = rir::contextData::getFBD(cData);
+      if (genericFeedbackLen == -1) {
+        genericFeedbackLen = Rf_length(otherFeedbackContainer);
+      } else {
+        assert(genericFeedbackLen == Rf_length(otherFeedbackContainer));
+      }
+      for (int i = 0; i < Rf_length(otherFeedbackContainer); i++) {
+        SEXP ele = VECTOR_ELT(otherFeedbackContainer, i);
+        rir::ObservedValues nVal;
+
+        uint32_t * v = (uint32_t *) &nVal;
+        
+        if (ele == R_NilValue) {
+          *v = 0;
+          #if DEBUG_GENERAL_FEEDBACK_ADAPTER_IN > 0
+          // Check if we are correct
+          std::cout << "Actual: " << 0 << ", Stored: " << *((uint32_t *) &nVal) << std::endl;
+          #endif
+        } else if (ele == R_dot_defined) {
+          *v = 10;
+          #if DEBUG_GENERAL_FEEDBACK_ADAPTER_IN > 0
+          // Check if we are correct
+          std::cout << "Actual: " << 10 << ", Stored: " << *((uint32_t *) &nVal) << std::endl;
+          #endif
+        } else if (ele == R_dot_Method) {
+          *v = 20;
+          #if DEBUG_GENERAL_FEEDBACK_ADAPTER_IN > 0
+          // Check if we are correct
+          std::cout << "Actual: " << 20 << ", Stored: " << *((uint32_t *) &nVal) << std::endl;
+          #endif
+        } else if (TYPEOF(ele) == VECSXP){
+
+          auto hast = VECTOR_ELT(ele, 0);
+          auto index = Rf_asInteger(VECTOR_ELT(ele, 1));
+          std::stringstream ss;
+          ss << CHAR(PRINTNAME(hast)) << "_" << index;
+          auto currKey = Rf_install(ss.str().c_str());
+          
+          // Key already seen
+          if (feedbackIndirections.count(currKey) > 0) {
+            *v = feedbackIndirections[currKey];
+          } else {
+            *v = indIdx;
+            feedbackIndirections[currKey] = indIdx;
+            indIdx++;
+          }
+          #if DEBUG_GENERAL_FEEDBACK_ADAPTER_IN > 0
+          // Check if we are correct
+          std::cout << "Actual: " << ss.str() << ", Stored: " << CHAR(PRINTNAME(getIndirectionByIndex(*((uint32_t *) &nVal)))) << ", At idx: " << *((uint32_t *) &nVal) << std::endl;
+          #endif
+        } else {
+          *v = 0;
+          #if DEBUG_GENERAL_FEEDBACK_ADAPTER_IN > 0
+          // Check if we are correct
+          std::cout << "Actual: " << 0 << ", Stored: " << *((uint32_t *) &nVal) << std::endl;
+          #endif
+        }
+        res.push_back(nVal);
+        
+      }
 
       SEXP tfContainer = rir::contextData::getTF(cData);
       rir::ObservedValues * tmp = (rir::ObservedValues *) DATAPTR(tfContainer);
