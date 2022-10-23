@@ -368,6 +368,16 @@ class TVGraph {
       return finalSolution;
     }
 
+    unsigned int getSolutionSize() {
+      assert(solutionFound == true);
+      return finalSolution.size();
+    }
+
+    unsigned int getTotalNumberOfSlots() {
+      assert(typeVersions.size() > 0);
+      return typeVersions[0].size();
+    }
+
   private:    
     typedef std::vector<rir::ObservedValues> TFVector;
     typedef std::pair<int, int> WorklistElement;
@@ -385,6 +395,8 @@ class TVGraph {
     // Helper methods
     // ====================================================================================
     // 
+
+    
 
     // 
     // Takes a contextData SEXP and extracts its type feedback vector. If the type feedback 

@@ -22,6 +22,10 @@
 
 
 size_t SerializedDataProcessor::bitcodesSeen = 0;
+unsigned int SerializedDataProcessor::binariesWithScopeForReduction = 0;
+unsigned int SerializedDataProcessor::totalSlotsSeen = 0;
+unsigned int SerializedDataProcessor::totalSlotsLeft = 0;
+
 size_t SerializedDataProcessor::bitcodesDeprecated = 0;
 unsigned int SerializedDataProcessor::stirctComparisons = 0;
 unsigned int SerializedDataProcessor::roughEQComparisons = 0;
@@ -254,6 +258,13 @@ void SerializedDataProcessor::init() {
     _origContextWiseData[con].push_back(std::pair<SEXP, SEXP>(epochSym, cData));
   });
 
+  // Count binaries that have scope for reduction
+  for (auto & ele : _origContextWiseData) {
+    if (ele.second.size() > 1) {
+      binariesWithScopeForReduction += ele.second.size();
+    }
+  }
+
   // 
   // 2. Contextwise binary reduction
   // 
@@ -374,6 +385,10 @@ void SerializedDataProcessor::init() {
 
       TVGraph g(ele.second);
       auto stat = g.init();
+
+      totalSlotsSeen += g.getTotalNumberOfSlots();
+      totalSlotsLeft += g.getSolutionSize();
+
       if (!stat) {
         Rf_error("Init failed for TVGraph");
       }
@@ -562,13 +577,26 @@ void SerializedDataProcessor::print(const unsigned int & space) {
   // }
 
   printSpace(space);
-  std::cout << "Original Contexts count : " << _origContextWiseData.size() << std::endl;
+  std::cout << "Original Contexts count   : " << _origContextWiseData.size() << std::endl;
+
 
   printSpace(space);
-  std::cout << "Final Contexts count    : " << (_origContextWiseData.size() - _deprecatedContexts) << std::endl;
+  std::cout << "Binaries Reduced          : " << bitcodesDeprecated << std::endl;
 
   printSpace(space);
-  std::cout << "Original Bitcodes count : " << _origBitcodes << std::endl;
+  std::cout << "Percent Binaries Reduced  : " << (bitcodesDeprecated / (float) binariesWithScopeForReduction) << std::endl;
+
+  printSpace(space);
+  std::cout << "Total Slots Seen          : " << totalSlotsSeen << std::endl;
+
+  printSpace(space);
+  std::cout << "Total Slots Left          : " << totalSlotsLeft << std::endl;
+
+  printSpace(space);
+  std::cout << "Final Contexts count      : " << (_origContextWiseData.size() - _deprecatedContexts) << std::endl;
+
+  printSpace(space);
+  std::cout << "Original Bitcodes count   : " << _origBitcodes << std::endl;
 
   // printSpace(space);
   // std::cout << "Deprecated Bitcodes count    : " << _deprecatedBitcodes << std::endl;
@@ -585,7 +613,22 @@ void SerializedDataProcessor::printStats(const unsigned int & space) {
   printSpace(space);
   std::cout << "Total seen                : " << bitcodesSeen << std::endl;
   printSpace(space);
+  std::cout << "Total scope for reduction : " << binariesWithScopeForReduction << std::endl;
+
+  printSpace(space);
   std::cout << "Deprecated                : " << bitcodesDeprecated << std::endl;
+  printSpace(space);
+  std::cout << "Percent Binaries Reduced  : " << (bitcodesDeprecated / (float) binariesWithScopeForReduction) * 100 << std::endl;
+
+
+  printSpace(space);
+  std::cout << "Total Slots Seen          : " << totalSlotsSeen << std::endl;
+
+  printSpace(space);
+  std::cout << "Total Slots Selected      : " << totalSlotsLeft << std::endl;
+
+  printSpace(space);
+  std::cout << "Percentage Slots Reduced  : " << ((totalSlotsSeen - totalSlotsLeft) / (float) totalSlotsSeen) * 100 << std::endl;
 
   printSpace(space);
   std::cout << "Strict                    : " << stirctComparisons << std::endl;

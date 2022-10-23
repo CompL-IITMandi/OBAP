@@ -47,6 +47,10 @@ class SerializedDataProcessor {
     static unsigned int roughEQComparisons;
     static unsigned int roughNEQComparisons;
     static unsigned int TVCases;
+    static unsigned int binariesWithScopeForReduction;
+
+    static unsigned int totalSlotsSeen;
+    static unsigned int totalSlotsLeft;
 
     rir::Context getMask() {
       return _mask;
