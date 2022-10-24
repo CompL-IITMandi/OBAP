@@ -271,6 +271,8 @@ void SerializedDataProcessor::init() {
 
   bool skipBinaryReduction = getenv("SKIP_CONTEXTWISE_REDUCTION") ? getenv("SKIP_CONTEXTWISE_REDUCTION")[0] == '1' : false;
 
+  std::unordered_map<unsigned long, std::set<int>> blacklist;
+
   #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 0
   printSpace(6);
   std::cout << "=== CONTEXTWISE SIMILARITY CHECK ===" << std::endl;
@@ -341,14 +343,24 @@ void SerializedDataProcessor::init() {
           // optimistic unlock never happens
           if (std::includes(r1.reqMap.begin(), r1.reqMap.end(), r2.reqMap.begin(), r2.reqMap.end()) || 
               std::includes(r2.reqMap.begin(), r2.reqMap.end(), r1.reqMap.begin(), r1.reqMap.end())) {
-            removed.push_back(j);
-            _deprecatedBitcodes++;
+                auto tvec1 = TVGraph::getFeedbackAsVector(cDataVec[i].second);
+                auto tvec2 = TVGraph::getFeedbackAsVector(cDataVec[j].second);
 
-            similars.push_back(cDataVec[j]);
+                auto blList = TVGraph::getDiffSet(tvec1, tvec2);
 
-            #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
-            std::cout << " [SIMILAR]";
-            #endif
+                for (auto & ele : blList) {
+                  blacklist[con].insert(ele);
+                }
+
+
+                removed.push_back(j);
+                _deprecatedBitcodes++;
+
+                similars.push_back(cDataVec[j]);
+
+                #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
+                std::cout << " [SIMILAR]";
+                #endif
           }
 
         }
@@ -383,11 +395,8 @@ void SerializedDataProcessor::init() {
       std::cout << "(*) TV needed" << std::endl;
       #endif
 
-      TVGraph g(ele.second);
+      TVGraph g(ele.second, blacklist[ele.first]);
       auto stat = g.init();
-
-      totalSlotsSeen += g.getTotalNumberOfSlots();
-      totalSlotsLeft += g.getSolutionSize();
 
       if (!stat) {
         Rf_error("Init failed for TVGraph");
@@ -396,6 +405,11 @@ void SerializedDataProcessor::init() {
       _tvGraphData[ele.first] = g;
 
       if (g.getNumTypeVersions() > 1) {
+
+        totalSlotsSeen += g.getTotalNumberOfSlots();
+        totalSlotsLeft += g.getSolutionSize();
+
+
         #if DEBUG_CONTEXTWISE_TYPE_VERSIONING > 0
         printSpace(8);
         std::cout << "(*) TV good case: " << g.getNumTypeVersions() << " TVs" << std::endl;

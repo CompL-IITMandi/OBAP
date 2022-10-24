@@ -220,6 +220,12 @@ class TVGraph {
     static unsigned int MAX_SLOTS_SIZE;
 
   public:
+    typedef std::vector<rir::ObservedValues> TFVector;
+    typedef std::pair<int, int> WorklistElement;
+    typedef std::vector<std::pair<int, int>> Worklist;
+    typedef std::set<int> SolutionBucket;
+
+    std::set<int> blacklist;
 
     unsigned int SLOT_FINDER_BUDGET = 10;
 
@@ -228,7 +234,8 @@ class TVGraph {
     // 
     // Expects a vector of contextData SEXP
     // 
-    TVGraph(std::vector<std::pair<SEXP, SEXP>> & cDataVec) {
+    TVGraph(std::vector<std::pair<SEXP, SEXP>> & cDataVec, std::set<int> bl) {
+      blacklist = bl;
       for (auto & cData : cDataVec) {
         addNode(cData);
       }
@@ -241,6 +248,16 @@ class TVGraph {
     bool init() {
       if (typeVersions.size() > 1) {
         solutionFound = solve();
+        std::cout << " ==== ==== SOLUTION ROWS ==== ==== " << std::endl;
+        for (auto & tv : typeVersions) {
+          std::cout << "{ ";
+          for (auto & idx : finalSolution) {
+            tv[idx].print(std::cout);
+            std::cout << "; ";
+          }
+          std::cout << "}" << std::endl;
+        }
+        std::cout << "===================================" << std::endl;
         assert (checkValidity(finalSolution));
 
         auto solSize = finalSolution.size();
@@ -378,11 +395,76 @@ class TVGraph {
       return typeVersions[0].size();
     }
 
+    // 
+    // Takes a contextData SEXP object and returns std::vector<rir::ObservedValues>
+    // 
+    static TFVector getFeedbackAsVector(SEXP cData) {
+      TFVector res;
+
+      SEXP tfContainer = rir::contextData::getTF(cData);
+      rir::ObservedValues * tmp = (rir::ObservedValues *) DATAPTR(tfContainer);
+      for (int i = 0; i < Rf_length(tfContainer) / (int) sizeof(rir::ObservedValues); i++) {
+          res.push_back(tmp[i]);      
+      }
+
+      return res;
+    }
+
+    // 
+    // Takes a rir::ObservedValue and returns equivalent uint32_t
+    // 
+    static uint32_t getFeedbackAsUint(const rir::ObservedValues & v) {
+      return *((uint32_t *) &v);
+    }
+
+    // 
+    // Returns a set of indices where the two Type Feedback vectors differ at
+    // We know that diff cannot possibly contain duplicates
+    // 
+    std::set<int> getDiffSet(std::pair<int, int> eles) {
+      auto first = typeVersions[eles.first];
+      auto second = typeVersions[eles.second];
+
+      std::set<int> diffSet;
+
+      assert(first.size() == second.size());
+      for (unsigned int i = 0; i < first.size(); i++) {
+        uint32_t v1 = getFeedbackAsUint(first[i]);
+        uint32_t v2 = getFeedbackAsUint(second[i]);
+
+        if (v1 != v2) {
+          diffSet.insert(i);
+        }
+      }
+
+      // CURB diffset with blacklist
+
+      std::set<int> result;
+
+      std::set_difference(diffSet.begin(), diffSet.end(), blacklist.begin(), blacklist.end(), std::inserter(result, result.end()));
+
+
+      return result;
+    }
+
+    static std::set<int> getDiffSet(TFVector first, TFVector second) {
+      std::set<int> diffSet;
+
+      assert(first.size() == second.size());
+      for (unsigned int i = 0; i < first.size(); i++) {
+        uint32_t v1 = getFeedbackAsUint(first[i]);
+        uint32_t v2 = getFeedbackAsUint(second[i]);
+
+        if (v1 != v2) {
+          diffSet.insert(i);
+        }
+      }
+
+      return diffSet;
+    }
+
+
   private:    
-    typedef std::vector<rir::ObservedValues> TFVector;
-    typedef std::pair<int, int> WorklistElement;
-    typedef std::vector<std::pair<int, int>> Worklist;
-    typedef std::set<int> SolutionBucket;
 
     bool solutionFound = false;
     SolutionBucket finalSolution;
@@ -422,27 +504,8 @@ class TVGraph {
     }
 
 
-    // 
-    // Takes a contextData SEXP object and returns std::vector<rir::ObservedValues>
-    // 
-    inline TFVector getFeedbackAsVector(SEXP cData) {
-      TFVector res;
+    
 
-      SEXP tfContainer = rir::contextData::getTF(cData);
-      rir::ObservedValues * tmp = (rir::ObservedValues *) DATAPTR(tfContainer);
-      for (int i = 0; i < Rf_length(tfContainer) / (int) sizeof(rir::ObservedValues); i++) {
-          res.push_back(tmp[i]);      
-      }
-
-      return res;
-    }
-
-    // 
-    // Takes a rir::ObservedValue and returns equivalent uint32_t
-    // 
-    uint32_t getFeedbackAsUint(const rir::ObservedValues & v) {
-      return *((uint32_t *) &v);
-    }
 
     // 
     // Returns true if the given TFVectors are the same 
@@ -775,28 +838,6 @@ class TVGraph {
       return std::pair<Worklist, SolutionBucket>(newWorklist, newSolutionBucket);
     }
 
-    // 
-    // Returns a set of indices where the two Type Feedback vectors differ at
-    // We know that diff cannot possibly contain duplicates
-    // 
-    std::set<int> getDiffSet(std::pair<int, int> eles) {
-      auto first = typeVersions[eles.first];
-      auto second = typeVersions[eles.second];
-
-      std::set<int> diffSet;
-
-      assert(first.size() == second.size());
-      for (unsigned int i = 0; i < first.size(); i++) {
-        uint32_t v1 = getFeedbackAsUint(first[i]);
-        uint32_t v2 = getFeedbackAsUint(second[i]);
-
-        if (v1 != v2) {
-          diffSet.insert(i);
-        }
-      }
-
-      return diffSet;
-    }
 
     // 
     // Returns the genesis worklist, it returns n choose 2 over the list of Type Feedback versions
