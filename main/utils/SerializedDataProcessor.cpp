@@ -235,6 +235,19 @@ static std::pair<SEXP, SEXP> chooseRepresentative(std::vector<std::pair<SEXP, SE
 
 }
 
+std::vector<std::string> getReqMapAsCppVector(SEXP rData) {
+  std::vector<std::string> reqMapVec;
+
+  for (int i = 0; i < Rf_length(rData); i++) {
+    SEXP ele = VECTOR_ELT(rData, i);
+    reqMapVec.push_back(CHAR(PRINTNAME(ele)));
+  }
+
+  std::sort(reqMapVec.begin(), reqMapVec.end());
+
+  return reqMapVec;
+}
+
 
 void SerializedDataProcessor::init() {
   static SEXP maskSym = Rf_install("mask");
@@ -348,15 +361,15 @@ void SerializedDataProcessor::init() {
 
                 auto blList = TVGraph::getDiffSet(tvec1, tvec2);
 
-                for (auto & ele : blList) {
-                  blacklist[con].insert(ele);
-                }
+                  for (auto & ele : blList) {
+                    blacklist[con].insert(ele);
+                  }
 
 
-                removed.push_back(j);
-                _deprecatedBitcodes++;
-
-                similars.push_back(cDataVec[j]);
+                  removed.push_back(j);
+                  _deprecatedBitcodes++;
+                  
+                  similars.push_back(cDataVec[j]);
 
                 #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
                 std::cout << " [SIMILAR]";
@@ -398,11 +411,16 @@ void SerializedDataProcessor::init() {
       TVGraph g(ele.second, blacklist[ele.first]);
       auto stat = g.init();
 
-      if (!stat) {
-        Rf_error("Init failed for TVGraph");
+      if (stat) {
+        _tvGraphData[ele.first] = g;
+      } else {
+        std::set<int> bl;
+        TVGraph g1(_origContextWiseData[ele.first], bl);
+        _tvGraphData[ele.first] = g1;
+
+        _deprecatedBitcodes = _deprecatedBitcodes - (_origContextWiseData[ele.first].size() - ele.second.size()) + 1;
       }
 
-      _tvGraphData[ele.first] = g;
 
       if (g.getNumTypeVersions() > 1) {
 

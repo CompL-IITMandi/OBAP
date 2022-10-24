@@ -248,17 +248,20 @@ class TVGraph {
     bool init() {
       if (typeVersions.size() > 1) {
         solutionFound = solve();
-        std::cout << " ==== ==== SOLUTION ROWS ==== ==== " << std::endl;
-        for (auto & tv : typeVersions) {
-          std::cout << "{ ";
-          for (auto & idx : finalSolution) {
-            tv[idx].print(std::cout);
-            std::cout << "; ";
-          }
-          std::cout << "}" << std::endl;
+        // std::cout << " ==== ==== SOLUTION ROWS ==== ==== " << std::endl;
+        // for (auto & tv : typeVersions) {
+        //   std::cout << "{ ";
+        //   for (auto & idx : finalSolution) {
+        //     tv[idx].print(std::cout);
+        //     std::cout << "; ";
+        //   }
+        //   std::cout << "}" << std::endl;
+        // }
+        // std::cout << "===================================" << std::endl;
+        // assert (checkValidity(finalSolution));
+        if (!checkValidity(finalSolution)) {
+          return false;
         }
-        std::cout << "===================================" << std::endl;
-        assert (checkValidity(finalSolution));
 
         auto solSize = finalSolution.size();
 
@@ -437,14 +440,9 @@ class TVGraph {
         }
       }
 
-      // CURB diffset with blacklist
-
-      std::set<int> result;
-
-      std::set_difference(diffSet.begin(), diffSet.end(), blacklist.begin(), blacklist.end(), std::inserter(result, result.end()));
 
 
-      return result;
+      return diffSet;
     }
 
     static std::set<int> getDiffSet(TFVector first, TFVector second) {
@@ -487,6 +485,13 @@ class TVGraph {
     // 
     void addNode(std::pair<SEXP, SEXP> cData) {
       TFVector currTFVector = getFeedbackAsVector(cData.second);
+      // CURB with blacklist to prevent infinite loops
+      for (auto & ele : blacklist) {
+        rir::ObservedValues rv;
+        uint32_t* v = (uint32_t *) &rv;
+        *v = 0;
+        currTFVector[ele] = rv;
+      }
       
       // If curr exists then add to an existing node
       unsigned int i = 0;
