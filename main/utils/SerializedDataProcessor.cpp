@@ -80,7 +80,7 @@ void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
 
       
       if (numTypeVersions == 1) {
-        tvg.iterateOverTVs([&] (std::vector<uint32_t> slotData, TVNode node) {
+        tvg.iterateOverTVs([&] (std::vector<uint32_t> slotData, std::vector<SEXP> generalSlotData, TVNode node) {
 
           auto nodeRes = node.get();
 
@@ -147,21 +147,40 @@ void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
         rir::contextUnit::addContext(cuContainer, ele.first);
         
         rir::contextUnit::addVersioning(cuContainer, 2);
-        
-        rir::contextUnit::addTFSlots(cuContainer, tvg.getSolutionSorted());
 
+        auto tvSolution = tvg.getSolutionSorted();
+
+        std::vector<int> genericFeedback;
+        std::vector<int> typeFeedback;
+
+        for (auto & slotIdx : tvSolution) {
+          if (slotIdx >= tvg.getGeneralFeedbackLen()) {
+            typeFeedback.push_back(slotIdx);
+          } else {
+            genericFeedback.push_back(slotIdx);
+          }
+        }
+        
+        rir::contextUnit::addTFSlots(cuContainer, typeFeedback);
+        rir::contextUnit::addFBSlots(cuContainer, genericFeedback);
 
         int startIdx = rir::contextUnit::binsStartingIndex();
-        tvg.iterateOverTVs([&] (std::vector<uint32_t> slotData, TVNode node) {
+        tvg.iterateOverTVs([&] (std::vector<uint32_t> slotData, std::vector<SEXP> generalSlotData, TVNode node) {
           auto nodeRes = node.get();
+
           for (auto & data : nodeRes) {
             SEXP buContainer;
             rir::Protect protecc1;
             protecc1(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
+            // std::cerr << "Creating BU: " << CHAR(PRINTNAME(data.first)) << std::endl;
+            // std::cerr << "  TV Slots: " << slotData.size() << std::endl;
+            // std::cerr << "  GFB Slots: " << generalSlotData.size() << std::endl;
+
             rir::binaryUnit::addEpoch(buContainer, data.first);
             rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
             rir::binaryUnit::addTVData(buContainer, slotData);
-
+            rir::binaryUnit::addFBData(buContainer, generalSlotData);
+            
             // Add Binary unit to Context unit
             rir::generalUtil::addSEXP(cuContainer, buContainer, startIdx);
             startIdx++;

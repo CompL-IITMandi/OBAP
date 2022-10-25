@@ -226,8 +226,13 @@ static void iterateOverMetadatasInDirectory() {
 
           ddIdx++;
         });
+
+        static int deserializerDebug = getenv("DES_DBG") ? std::stoi(getenv("DES_DBG")) : 0;
+
+        if (deserializerDebug) {
+          rir::deserializerData::print(ddContainer, 2);
+        }
         
-        // rir::deserializerData::print(ddContainer, 2);
         saveDMetaAndCopyFiles(ddContainer, fName);
         // testSavedDMeta(fName);
 
