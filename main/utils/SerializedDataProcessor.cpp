@@ -155,7 +155,7 @@ void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
 
         for (auto & slotIdx : tvSolution) {
           if (slotIdx >= tvg.getGeneralFeedbackLen()) {
-            typeFeedback.push_back(slotIdx);
+            typeFeedback.push_back(slotIdx - tvg.getGeneralFeedbackLen());
           } else {
             genericFeedback.push_back(slotIdx);
           }

@@ -27,6 +27,8 @@
 std::string outputPath;
 std::string inputPath;
 
+static int obapDEBUG = getenv("OBAP_DBG") ? std::stoi(getenv("OBAP_DBG")) : 0;
+
 static void saveDMetaAndCopyFiles(SEXP ddContainer, const std::string & metaFilename) {
   std::stringstream outFilePath;
 
@@ -125,6 +127,10 @@ static void iterateOverMetadatasInDirectory() {
     while ((ent = readdir(dir)) != NULL) {
       std::string fName = ent->d_name;
       if (fName.find(".meta") != std::string::npos) {
+
+        if (obapDEBUG) {
+          std::cerr << "OBAP processing: " << fName << std::endl;
+        }
 
         std::stringstream metadataPath;
         metadataPath << inputPath << "/" << fName;
@@ -227,9 +233,8 @@ static void iterateOverMetadatasInDirectory() {
           ddIdx++;
         });
 
-        static int deserializerDebug = getenv("DES_DBG") ? std::stoi(getenv("DES_DBG")) : 0;
 
-        if (deserializerDebug) {
+        if (obapDEBUG) {
           rir::deserializerData::print(ddContainer, 2);
         }
         
