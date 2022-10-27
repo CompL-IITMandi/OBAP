@@ -102,6 +102,7 @@ class Ticker {
 
 class TVNode {
   public:
+    int typeFeedbackLen = -1;
     int genericFeedbackLen = -1;
     void addNode(std::pair<SEXP, SEXP> cData) {
       redundantNodes++;
@@ -109,6 +110,8 @@ class TVNode {
       SEXP otherFeedbackContainer = rir::contextData::getFBD(cData.second);
       genericFeedbackLen = Rf_length(otherFeedbackContainer);
 
+      SEXP typeFeedbackContainer = rir::contextData::getTF(cData.second);
+      typeFeedbackLen = Rf_length(typeFeedbackContainer);
 
       auto rData = rir::contextData::getReqMapAsVector(cData.second);
       std::vector<std::string> reqMapVec = getReqMapAsCppVector(rData);
@@ -126,6 +129,10 @@ class TVNode {
       return genericFeedbackLen;
     }
 
+    int getTypeFeedbackLen() {
+      assert(typeFeedbackLen != -1);
+      return typeFeedbackLen;
+    }
     int size() {
       return redundantNodes;
     }
@@ -407,7 +414,7 @@ class TVGraph {
         std::vector<SEXP> generalSlotData;
         std::vector<uint32_t> typeSlotData;
         for (auto & idx : soln) {
-          if (idx >= node.getGeneralFeedbackLen()) {
+          if (idx < node.getTypeFeedbackLen()) {
             typeSlotData.push_back(getFeedbackAsUint(currTV[idx]));
           } else {
             auto currData = getFeedbackAsUint(currTV[idx]);
@@ -502,7 +509,13 @@ class TVGraph {
     static TFVector getFeedbackAsVector(SEXP cData) {
       TFVector res;
 
-            // Use simple indirection to do slot selection, can patch it back later
+      SEXP tfContainer = rir::contextData::getTF(cData);
+      rir::ObservedValues * tmp = (rir::ObservedValues *) DATAPTR(tfContainer);
+      for (int i = 0; i < Rf_length(tfContainer) / (int) sizeof(rir::ObservedValues); i++) {
+          res.push_back(tmp[i]);      
+      }
+
+      // Use simple indirection to do slot selection, can patch it back later
       SEXP otherFeedbackContainer = rir::contextData::getFBD(cData);
       for (int i = 0; i < Rf_length(otherFeedbackContainer); i++) {
         SEXP ele = VECTOR_ELT(otherFeedbackContainer, i);
@@ -563,12 +576,6 @@ class TVGraph {
 
         res.push_back(nVal);
 
-      }
-
-      SEXP tfContainer = rir::contextData::getTF(cData);
-      rir::ObservedValues * tmp = (rir::ObservedValues *) DATAPTR(tfContainer);
-      for (int i = 0; i < Rf_length(tfContainer) / (int) sizeof(rir::ObservedValues); i++) {
-          res.push_back(tmp[i]);      
       }
 
       return res;
@@ -673,6 +680,10 @@ class TVGraph {
 
     int getGeneralFeedbackLen() {
       return nodes[0].getGeneralFeedbackLen();
+    }
+
+    int getTypeFeedbackLen() {
+      return nodes[0].getTypeFeedbackLen();
     }
 
     private:

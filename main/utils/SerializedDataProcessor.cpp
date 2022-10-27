@@ -154,10 +154,10 @@ void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
         std::vector<int> typeFeedback;
 
         for (auto & slotIdx : tvSolution) {
-          if (slotIdx >= tvg.getGeneralFeedbackLen()) {
-            typeFeedback.push_back(slotIdx - tvg.getGeneralFeedbackLen());
+          if (slotIdx < tvg.getTypeFeedbackLen()) {
+            typeFeedback.push_back(slotIdx);
           } else {
-            genericFeedback.push_back(slotIdx);
+            genericFeedback.push_back(slotIdx - tvg.getTypeFeedbackLen());
           }
         }
         
