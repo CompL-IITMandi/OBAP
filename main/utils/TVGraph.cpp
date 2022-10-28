@@ -4,3 +4,4 @@ unsigned int TVGraph::MAX_SLOTS_SIZE = 0;
 int TVGraph::indIdx = 30;
 
 std::unordered_map<SEXP, unsigned int> TVGraph::feedbackIndirections;
+unsigned int TVGraph::collisions = 0;

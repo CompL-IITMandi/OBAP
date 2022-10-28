@@ -162,6 +162,23 @@ class TVNode {
       return result;
     }
 
+    unsigned int getCollisions() {
+      unsigned int res = 0;
+      for (auto & div : diversions) {
+        if (div.second.size() > 1) {
+          res++;
+          // std::cout << "(WEIRD CASE)" << std::endl;
+          // for (auto & e : div.second) {
+          //   rir::contextData::print(e.second, space + 4);
+          // }
+        } else {
+          // std::cout << "(NORMAL CASE): " << div.first << std::endl;
+        } 
+      }
+
+      return res;
+    }
+
     void print(unsigned int space = 0) {
       // printSpace(space);
       // std::cout << "=== TVNODE ===" << std::endl;
@@ -184,6 +201,8 @@ class TVNode {
         } 
       }
       #endif
+
+      
       
       // printSpace(space);
       // std::cout << "Sorted binaries: " << std::endl;
@@ -249,6 +268,13 @@ class TVGraph {
     typedef std::pair<int, int> WorklistElement;
     typedef std::vector<std::pair<int, int>> Worklist;
     typedef std::set<int> SolutionBucket;
+    static unsigned int collisions;
+
+    void collisionCases() {
+      for (auto & n : nodes) {
+        collisions += n.second.getCollisions();
+      }
+    }
 
     // Indirections to support additional type of feedbacks
     // For convert [HAST, INDEX] -> HAST_INDEX symbol and assign a unique number to the same

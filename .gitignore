@@ -12,3 +12,7 @@ out*
 b.sh
 
 deprecate.sh
+
+llvm*
+rawBC*
+tmp*

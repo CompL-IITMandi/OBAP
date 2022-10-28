@@ -247,6 +247,9 @@ static void iterateOverMetadatasInDirectory() {
     SerializedDataProcessor::printStats(0);
 
     printSpace(0);
+    std::cout << "Collisions                : " << TVGraph::collisions << std::endl;
+
+    printSpace(0);
     std::cout << "Functions Unique          : " << functionsSeen << std::endl;
     
     printSpace(0);

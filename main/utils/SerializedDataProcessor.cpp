@@ -429,13 +429,17 @@ void SerializedDataProcessor::init() {
 
       TVGraph g(ele.second, blacklist[ele.first]);
       auto stat = g.init();
+      
 
       if (stat) {
+        g.collisionCases();
         _tvGraphData[ele.first] = g;
       } else {
         std::set<int> bl;
         TVGraph g1(_origContextWiseData[ele.first], bl);
         _tvGraphData[ele.first] = g1;
+
+        g1.collisionCases();
 
         _deprecatedBitcodes = _deprecatedBitcodes - (_origContextWiseData[ele.first].size() - ele.second.size()) + 1;
       }
