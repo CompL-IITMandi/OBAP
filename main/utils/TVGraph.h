@@ -107,7 +107,7 @@ class TVNode {
     void addNode(std::pair<SEXP, SEXP> cData) {
       redundantNodes++;
 
-      rir::contextData::print(cData.second, 0);
+      // rir::contextData::print(cData.second, 0);
 
       SEXP otherFeedbackContainer = rir::contextData::getFBD(cData.second);
       genericFeedbackLen = Rf_length(otherFeedbackContainer);
@@ -115,8 +115,8 @@ class TVNode {
       SEXP typeFeedbackContainer = rir::contextData::getTF(cData.second);
       typeFeedbackLen = Rf_length(typeFeedbackContainer) / (int) sizeof(rir::ObservedValues);
 
-      std::cout << "TF LEN: " << typeFeedbackLen << std::endl;
-      std::cout << "GF LEN: " << genericFeedbackLen<< std::endl;
+      // std::cout << "TF LEN: " << typeFeedbackLen << std::endl;
+      // std::cout << "GF LEN: " << genericFeedbackLen<< std::endl;
 
       auto rData = rir::contextData::getReqMapAsVector(cData.second);
       std::vector<std::string> reqMapVec = getReqMapAsCppVector(rData);
