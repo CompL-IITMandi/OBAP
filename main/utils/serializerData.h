@@ -21,12 +21,13 @@ namespace rir {
         // 4 (SEXP) Children Data,
         // 5 (SEXP) cPool
         // 6 (SEXP) sPool
+        // 7 (SEXP) poolEpoch
 
     public:
 
         // Misc functions
         static unsigned getStorageSize() {
-            return 7;
+            return 8;
         }
 
         static void addSEXP(SEXP container, SEXP data, const int & index) {
@@ -148,6 +149,15 @@ namespace rir {
             return VECTOR_ELT(container, 6);
         }
 
+        // ENTRY 7: Source Pool
+        static void addEpoch(SEXP container, SEXP data) {
+            addSEXP(container, data, 7);
+        }
+
+        static SEXP getEpoch(SEXP container) {
+            return VECTOR_ELT(container, 7);
+        }
+
         static void print(SEXP container, int space) {
             printSpace(space);
             std::cout << "== serializedPool ==" << std::endl;
@@ -267,6 +277,8 @@ namespace rir {
                 std::cout << TYPEOF(c) << " ";
             }
             std::cout << "]" << std::endl;
+            printSpace(space);
+            std::cout << "ENTRY(7)[Epoch]: " << *((size_t *) DATAPTR(getEpoch(container))) << std::endl;
         }
     };
 
@@ -283,10 +295,13 @@ namespace rir {
         // 4 (SEXP) otherFeedbackInfo
         // Stores the test info and other callee info
 
+        // 5 (SEXP) pointsOfDeopt
+        // Stores the slot information about the points of deopt
+
         public:
             // Misc functions
             static unsigned getStorageSize() {
-                return 5;
+                return 6;
             }
 
             static void addSEXP(SEXP container, SEXP data, const int & index) {
@@ -399,6 +414,15 @@ namespace rir {
                 return getSEXP(container, 4);
             }
 
+            // ENTRY 5: PointsOfDeopt
+            static void addPOD(SEXP container, SEXP data) {
+                addSEXP(container, data, 5);
+            }
+
+            static SEXP getPOD(SEXP container) {
+                return getSEXP(container, 5);
+            }
+
             static void print(SEXP container, unsigned int space) {
                 printSpace(space);
                 std::cout << "== contextData ==" << std::endl;
@@ -418,14 +442,14 @@ namespace rir {
                 std::cout << ">" << std::endl;
                 printSpace(space);
                 SEXP tfContainer = getTF(container);
-                std::cout << "ENTRY(2)[Type Feedback Info](" << Rf_length(tfContainer) / (int) sizeof(ObservedValues) << " Entries): <";
+                std::cout << "ENTRY(2)[Type Feedback Info](" << Rf_length(tfContainer) / (int) sizeof(ObservedValues) << " Entries): < ";
                 ObservedValues * tmp = (ObservedValues *) DATAPTR(tfContainer);
                 for (int i = 0; i < Rf_length(tfContainer) / (int) sizeof(ObservedValues); i++) {
-                    std::cout << " [";
+                    std::cout << "[";
                     tmp[i].print(std::cout);
-                    if (i + 1 != Rf_length(tfContainer) / (int) sizeof(ObservedValues)) {
-                        std::cout << "]";
-                    }
+                    std::cout << "] ";
+                    // if (i + 1 != Rf_length(tfContainer) / (int) sizeof(ObservedValues)) {
+                    // }
                 }
                 std::cout << ">" << std::endl;
 
@@ -434,22 +458,56 @@ namespace rir {
 
                 printSpace(space);
                 SEXP fbdContainer = getFBD(container);
-                std::cout << "ENTRY(4)[Other Feedback Info](" << Rf_length(fbdContainer) << " Entries): <";
+                std::cout << "ENTRY(4)[Other Feedback Info](" << Rf_length(fbdContainer) << " Entries): < ";
 
                 for (int i = 0; i < Rf_length(fbdContainer); i++) {
                     SEXP ele = VECTOR_ELT(fbdContainer, i);
                     if (ele == R_NilValue) {
-                        std::cout << "NIL, ";
+                        std::cout << "NIL ";
                     } else if (ele == R_dot_defined) {
-                        std::cout << "T, ";
+                        std::cout << "T ";
                     } else if (ele == R_dot_Method) {
-                        std::cout << "F, ";
+                        std::cout << "F ";
                     } else if (TYPEOF(ele) == VECSXP){
                         auto hast = VECTOR_ELT(ele, 0);
                         auto index = Rf_asInteger(VECTOR_ELT(ele, 1));
-                        std::cout << "(" << CHAR(PRINTNAME(hast)) << "," << index << "), ";
+                        std::cout << "(" << CHAR(PRINTNAME(hast)) << "," << index << ") ";
                     } else {
-                        std::cout << "UN, ";
+                        std::cout << "UN ";
+                    }
+                }
+                std::cout << ">" << std::endl;
+
+                printSpace(space);
+                SEXP podContainer = getPOD(container);
+                std::cout << "ENTRY(5)[Points Of Deopt](" << Rf_length(podContainer) << " Entries): < ";
+
+                for (int i = 0; i < Rf_length(podContainer); i++) {
+                    SEXP ele = VECTOR_ELT(podContainer, i);
+                    auto speculationType = Rf_asInteger(VECTOR_ELT(ele, 0));
+                    auto speculationIdx = Rf_asInteger(VECTOR_ELT(ele, 1));
+                    if (speculationType == 0) {
+                        ObservedValues * tmp = (ObservedValues *) DATAPTR(tfContainer);
+                        std::cout << "[";
+                        tmp[speculationIdx].print(std::cout);
+                        std::cout << "] ";
+                    } else {
+                        SEXP ele = VECTOR_ELT(fbdContainer, speculationIdx);
+                        std::cout << "[";
+                        if (ele == R_NilValue) {
+                            std::cout << "NIL ";
+                        } else if (ele == R_dot_defined) {
+                            std::cout << "T ";
+                        } else if (ele == R_dot_Method) {
+                            std::cout << "F ";
+                        } else if (TYPEOF(ele) == VECSXP){
+                            auto hast = VECTOR_ELT(ele, 0);
+                            auto index = Rf_asInteger(VECTOR_ELT(ele, 1));
+                            std::cout << "(" << CHAR(PRINTNAME(hast)) << "," << index << ") ";
+                        } else {
+                            std::cout << "UN ";
+                        }
+                        std::cout << "] ";
                     }
                 }
                 std::cout << ">" << std::endl;

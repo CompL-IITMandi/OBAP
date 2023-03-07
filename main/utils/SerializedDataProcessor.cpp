@@ -14,8 +14,8 @@
 #define DEBUG_LOCALS_INIT 0
 
 // Possible values 0, 1, 2
-#define DEBUG_CONTEXTWISE_SIMILARITY_CHECK 0
-#define DEBUG_CONTEXTWISE_TYPE_VERSIONING 0
+#define DEBUG_CONTEXTWISE_SIMILARITY_CHECK 2
+#define DEBUG_CONTEXTWISE_TYPE_VERSIONING 2
 
 
 #define PRINT_REPRESENTATIVE_SELECTION_NON_TRIVIAL_CASES 0
@@ -313,6 +313,8 @@ void SerializedDataProcessor::init() {
     unsigned long con = ele.first;
     std::vector<std::pair<SEXP, SEXP>> cDataVec = ele.second;
 
+    std::set<int> bbb;
+
     #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 0
     printSpace(8);
     std::cout << "Context(" << con << "): " << cDataVec.size() << " binaries" << std::endl;
@@ -375,10 +377,33 @@ void SerializedDataProcessor::init() {
           // optimistic unlock never happens
           if (std::includes(r1.reqMap.begin(), r1.reqMap.end(), r2.reqMap.begin(), r2.reqMap.end()) || 
               std::includes(r2.reqMap.begin(), r2.reqMap.end(), r1.reqMap.begin(), r1.reqMap.end())) {
-                auto tvec1 = TVGraph::getFeedbackAsVector(cDataVec[i].second);
-                auto tvec2 = TVGraph::getFeedbackAsVector(cDataVec[j].second);
+                std::vector<int> criticalFeedback1, criticalFeedback2;
+                
+                auto tvec1 = TVGraph::getFeedbackAsVector(cDataVec[i].second, &criticalFeedback1);
+                auto tvec2 = TVGraph::getFeedbackAsVector(cDataVec[j].second, &criticalFeedback2);
 
-                auto blList = TVGraph::getDiffSet(tvec1, tvec2);
+                bool criticalFeedbackIdxCheck = true;
+
+                for (auto & critIdx : criticalFeedback1) {
+                  uint32_t v1 = TVGraph::getFeedbackAsUint(tvec1[critIdx]);
+                  uint32_t v2 = TVGraph::getFeedbackAsUint(tvec2[critIdx]);
+
+                  if (v1 != v2) {
+                    criticalFeedbackIdxCheck = false;
+                  }
+                }
+
+                for (auto & critIdx : criticalFeedback2) {
+                  uint32_t v1 = TVGraph::getFeedbackAsUint(tvec1[critIdx]);
+                  uint32_t v2 = TVGraph::getFeedbackAsUint(tvec2[critIdx]);
+
+                  if (v1 != v2) {
+                    criticalFeedbackIdxCheck = false;
+                  }
+                }
+
+                if (criticalFeedbackIdxCheck) {
+                  auto blList = TVGraph::getDiffSet(tvec1, tvec2);
 
                   for (auto & ele : blList) {
                     blacklist[con].insert(ele);
@@ -390,9 +415,15 @@ void SerializedDataProcessor::init() {
                   
                   similars.push_back(cDataVec[j]);
 
-                #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
-                std::cout << " [SIMILAR]";
-                #endif
+                  #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
+                  std::cout << " [SIMILAR]";
+                  #endif
+                } else {
+                  #if DEBUG_CONTEXTWISE_SIMILARITY_CHECK > 1
+                  std::cout << " [CRITICAL INDEX CHECK FAILED]";
+                  #endif
+                }
+
           }
 
         }
@@ -428,6 +459,10 @@ void SerializedDataProcessor::init() {
       #endif
 
       TVGraph g(ele.second, blacklist[ele.first]);
+      #if DEBUG_CONTEXTWISE_TYPE_VERSIONING > 0
+      printSpace(8);
+      std::cout << "(*) TVGraph end" << std::endl;
+      #endif
       auto stat = g.init();
       
 

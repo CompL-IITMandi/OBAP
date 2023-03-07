@@ -538,13 +538,34 @@ class TVGraph {
     // 
     // Takes a contextData SEXP object and returns std::vector<rir::ObservedValues>
     // 
-    static TFVector getFeedbackAsVector(SEXP cData) {
+    static TFVector getFeedbackAsVector(SEXP cData, std::vector<int> * criticalFeedback = nullptr) {
       TFVector res;
+
+      std::unordered_map<int, bool> critTFIdx;
+      std::unordered_map<int, bool> critOTHIdx;
+
+      SEXP podContainer = rir::contextData::getPOD(cData);
+      for (int i = 0; i < Rf_length(podContainer); i++) {
+        SEXP ele = VECTOR_ELT(podContainer, i);
+        auto speculationType = Rf_asInteger(VECTOR_ELT(ele, 0));
+        auto speculationIdx = Rf_asInteger(VECTOR_ELT(ele, 1));
+        if (speculationType == 0) {
+          critTFIdx[speculationIdx] = true;
+        } else {
+          critOTHIdx[speculationIdx] = true;
+        }
+      }
+
+      int counter = 0;
 
       SEXP tfContainer = rir::contextData::getTF(cData);
       rir::ObservedValues * tmp = (rir::ObservedValues *) DATAPTR(tfContainer);
       for (int i = 0; i < Rf_length(tfContainer) / (int) sizeof(rir::ObservedValues); i++) {
-          res.push_back(tmp[i]);      
+          res.push_back(tmp[i]); 
+          if (critTFIdx.count(i) > 0) {
+            if(criticalFeedback) criticalFeedback->push_back(counter);
+          }
+          counter++;
       }
 
       // Use simple indirection to do slot selection, can patch it back later
@@ -607,7 +628,12 @@ class TVGraph {
         }
 
         res.push_back(nVal);
-
+        
+        if (critOTHIdx.count(i) > 0) {
+          if(criticalFeedback) criticalFeedback->push_back(counter);
+        }
+        
+        counter++;
       }
 
       return res;
