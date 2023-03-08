@@ -18,7 +18,6 @@ if [ -z "$3" ]; then
     exit
 fi
 
-
 echo "=== BUILDING OBAP ==="
 echo "Build DIR: $1"
 echo "LLVM  DIR: $2"
