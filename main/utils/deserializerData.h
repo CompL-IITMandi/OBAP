@@ -2,6 +2,7 @@
 
 #include "Rinternals.h"
 #include "runtime/Context.h"
+#include <vector>
 
 namespace rir {
     struct generalUtil {

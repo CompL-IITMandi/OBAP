@@ -105,28 +105,28 @@ class TVNode {
     int typeFeedbackLen = -1;
     int genericFeedbackLen = -1;
     void addNode(std::pair<SEXP, SEXP> cData) {
-      redundantNodes++;
+      // redundantNodes++;
 
-      // rir::contextData::print(cData.second, 0);
+      // // rir::contextData::print(cData.second, 0);
 
-      SEXP otherFeedbackContainer = rir::contextData::getFBD(cData.second);
-      genericFeedbackLen = Rf_length(otherFeedbackContainer);
+      // SEXP otherFeedbackContainer = rir::contextData::getFBD(cData.second);
+      // genericFeedbackLen = Rf_length(otherFeedbackContainer);
 
-      SEXP typeFeedbackContainer = rir::contextData::getTF(cData.second);
-      typeFeedbackLen = Rf_length(typeFeedbackContainer) / (int) sizeof(rir::ObservedValues);
+      // SEXP typeFeedbackContainer = rir::contextData::getTF(cData.second);
+      // typeFeedbackLen = Rf_length(typeFeedbackContainer) / (int) sizeof(rir::ObservedValues);
 
-      // std::cout << "TF LEN: " << typeFeedbackLen << std::endl;
-      // std::cout << "GF LEN: " << genericFeedbackLen<< std::endl;
+      // // std::cout << "TF LEN: " << typeFeedbackLen << std::endl;
+      // // std::cout << "GF LEN: " << genericFeedbackLen<< std::endl;
 
-      auto rData = rir::contextData::getReqMapAsVector(cData.second);
-      std::vector<std::string> reqMapVec = getReqMapAsCppVector(rData);
-      std::stringstream ss;
+      // auto rData = rir::contextData::getReqMapAsVector(cData.second);
+      // std::vector<std::string> reqMapVec = getReqMapAsCppVector(rData);
+      // std::stringstream ss;
 
-      for (auto & e : reqMapVec) {
-        ss << e << ";";
-      }
+      // for (auto & e : reqMapVec) {
+      //   ss << e << ";";
+      // }
 
-      diversions[ss.str()].push_back(cData);
+      // diversions[ss.str()].push_back(cData);
     }
 
     int getGeneralFeedbackLen() {
@@ -541,100 +541,100 @@ class TVGraph {
     static TFVector getFeedbackAsVector(SEXP cData, std::vector<int> * criticalFeedback = nullptr) {
       TFVector res;
 
-      std::unordered_map<int, bool> critTFIdx;
-      std::unordered_map<int, bool> critOTHIdx;
+      // std::unordered_map<int, bool> critTFIdx;
+      // std::unordered_map<int, bool> critOTHIdx;
 
-      SEXP podContainer = rir::contextData::getPOD(cData);
-      for (int i = 0; i < Rf_length(podContainer); i++) {
-        SEXP ele = VECTOR_ELT(podContainer, i);
-        auto speculationType = Rf_asInteger(VECTOR_ELT(ele, 0));
-        auto speculationIdx = Rf_asInteger(VECTOR_ELT(ele, 1));
-        if (speculationType == 0) {
-          critTFIdx[speculationIdx] = true;
-        } else {
-          critOTHIdx[speculationIdx] = true;
-        }
-      }
+      // SEXP podContainer = rir::contextData::getPOD(cData);
+      // for (int i = 0; i < Rf_length(podContainer); i++) {
+      //   SEXP ele = VECTOR_ELT(podContainer, i);
+      //   auto speculationType = Rf_asInteger(VECTOR_ELT(ele, 0));
+      //   auto speculationIdx = Rf_asInteger(VECTOR_ELT(ele, 1));
+      //   if (speculationType == 0) {
+      //     critTFIdx[speculationIdx] = true;
+      //   } else {
+      //     critOTHIdx[speculationIdx] = true;
+      //   }
+      // }
 
-      int counter = 0;
+      // int counter = 0;
 
-      SEXP tfContainer = rir::contextData::getTF(cData);
-      rir::ObservedValues * tmp = (rir::ObservedValues *) DATAPTR(tfContainer);
-      for (int i = 0; i < Rf_length(tfContainer) / (int) sizeof(rir::ObservedValues); i++) {
-          res.push_back(tmp[i]); 
-          if (critTFIdx.count(i) > 0) {
-            if(criticalFeedback) criticalFeedback->push_back(counter);
-          }
-          counter++;
-      }
+      // SEXP tfContainer = rir::contextData::getTF(cData);
+      // rir::ObservedValues * tmp = (rir::ObservedValues *) DATAPTR(tfContainer);
+      // for (int i = 0; i < Rf_length(tfContainer) / (int) sizeof(rir::ObservedValues); i++) {
+      //     res.push_back(tmp[i]); 
+      //     if (critTFIdx.count(i) > 0) {
+      //       if(criticalFeedback) criticalFeedback->push_back(counter);
+      //     }
+      //     counter++;
+      // }
 
-      // Use simple indirection to do slot selection, can patch it back later
-      SEXP otherFeedbackContainer = rir::contextData::getFBD(cData);
-      for (int i = 0; i < Rf_length(otherFeedbackContainer); i++) {
-        SEXP ele = VECTOR_ELT(otherFeedbackContainer, i);
-        rir::ObservedValues nVal;
+      // // Use simple indirection to do slot selection, can patch it back later
+      // SEXP otherFeedbackContainer = rir::contextData::getFBD(cData);
+      // for (int i = 0; i < Rf_length(otherFeedbackContainer); i++) {
+      //   SEXP ele = VECTOR_ELT(otherFeedbackContainer, i);
+      //   rir::ObservedValues nVal;
 
-        uint32_t * v = (uint32_t *) &nVal;
+      //   uint32_t * v = (uint32_t *) &nVal;
 
-        if (ele == R_NilValue) {
-          *v = 0;
-          #if DEBUG_GENERAL_FEEDBACK_ADAPTER_IN > 0
-          // Check if we are correct
-          std::cerr << "Actual: " << 0 << ", Stored: " << *((uint32_t *) &nVal) << std::endl;
-          #endif
-        } else if (ele == R_dot_defined) {
-          *v = 10;
-          #if DEBUG_GENERAL_FEEDBACK_ADAPTER_IN > 0
-          // Check if we are correct
-          std::cerr << "Actual: " << 10 << ", Stored: " << *((uint32_t *) &nVal) << std::endl;
-          #endif
-        } else if (ele == R_dot_Method) {
-          *v = 20;
-          #if DEBUG_GENERAL_FEEDBACK_ADAPTER_IN > 0
-          // Check if we are correct
-          std::cerr << "Actual: " << 20 << ", Stored: " << *((uint32_t *) &nVal) << std::endl;
-          #endif
-        } else if (TYPEOF(ele) == VECSXP){
+      //   if (ele == R_NilValue) {
+      //     *v = 0;
+      //     #if DEBUG_GENERAL_FEEDBACK_ADAPTER_IN > 0
+      //     // Check if we are correct
+      //     std::cerr << "Actual: " << 0 << ", Stored: " << *((uint32_t *) &nVal) << std::endl;
+      //     #endif
+      //   } else if (ele == R_dot_defined) {
+      //     *v = 10;
+      //     #if DEBUG_GENERAL_FEEDBACK_ADAPTER_IN > 0
+      //     // Check if we are correct
+      //     std::cerr << "Actual: " << 10 << ", Stored: " << *((uint32_t *) &nVal) << std::endl;
+      //     #endif
+      //   } else if (ele == R_dot_Method) {
+      //     *v = 20;
+      //     #if DEBUG_GENERAL_FEEDBACK_ADAPTER_IN > 0
+      //     // Check if we are correct
+      //     std::cerr << "Actual: " << 20 << ", Stored: " << *((uint32_t *) &nVal) << std::endl;
+      //     #endif
+      //   } else if (TYPEOF(ele) == VECSXP){
 
-          auto hast = VECTOR_ELT(ele, 0);
-          auto index = Rf_asInteger(VECTOR_ELT(ele, 1));
-          std::stringstream ss;
-          ss << CHAR(PRINTNAME(hast)) << "_" << index;
-          auto currKey = Rf_install(ss.str().c_str());
+      //     auto hast = VECTOR_ELT(ele, 0);
+      //     auto index = Rf_asInteger(VECTOR_ELT(ele, 1));
+      //     std::stringstream ss;
+      //     ss << CHAR(PRINTNAME(hast)) << "_" << index;
+      //     auto currKey = Rf_install(ss.str().c_str());
 
-          // Key already seen
-          if (feedbackIndirections.count(currKey) > 0) {
-            *v = feedbackIndirections[currKey];
-          } else {
-            *v = indIdx;
-            feedbackIndirections[currKey] = indIdx;
-            indIdx++;
-          }
-          #if DEBUG_GENERAL_FEEDBACK_ADAPTER_IN > 0
-          // Check if we are correct
-          std::cerr << "Actual: " << ss.str() << ", Stored: " << CHAR(PRINTNAME(getIndirectionByIndex(*((uint32_t *) &nVal)))) << ", At idx: " << *((uint32_t *) &nVal) << std::endl;
-          #endif
-        } else {
-          *v = 0;
-          #if DEBUG_GENERAL_FEEDBACK_ADAPTER_IN > 0
-          // Check if we are correct
-          std::cerr << "Actual: " << 0 << ", Stored: " << *((uint32_t *) &nVal) << std::endl;
-          #endif
-        }
-        static int skipGeneralFeedback = getenv("SKIP_GENERAL_FEEDBACK") ? std::stoi(getenv("SKIP_GENERAL_FEEDBACK")) : 0;
+      //     // Key already seen
+      //     if (feedbackIndirections.count(currKey) > 0) {
+      //       *v = feedbackIndirections[currKey];
+      //     } else {
+      //       *v = indIdx;
+      //       feedbackIndirections[currKey] = indIdx;
+      //       indIdx++;
+      //     }
+      //     #if DEBUG_GENERAL_FEEDBACK_ADAPTER_IN > 0
+      //     // Check if we are correct
+      //     std::cerr << "Actual: " << ss.str() << ", Stored: " << CHAR(PRINTNAME(getIndirectionByIndex(*((uint32_t *) &nVal)))) << ", At idx: " << *((uint32_t *) &nVal) << std::endl;
+      //     #endif
+      //   } else {
+      //     *v = 0;
+      //     #if DEBUG_GENERAL_FEEDBACK_ADAPTER_IN > 0
+      //     // Check if we are correct
+      //     std::cerr << "Actual: " << 0 << ", Stored: " << *((uint32_t *) &nVal) << std::endl;
+      //     #endif
+      //   }
+      //   static int skipGeneralFeedback = getenv("SKIP_GENERAL_FEEDBACK") ? std::stoi(getenv("SKIP_GENERAL_FEEDBACK")) : 0;
 
-        if (skipGeneralFeedback) {
-          *v = 0;
-        }
+      //   if (skipGeneralFeedback) {
+      //     *v = 0;
+      //   }
 
-        res.push_back(nVal);
+      //   res.push_back(nVal);
         
-        if (critOTHIdx.count(i) > 0) {
-          if(criticalFeedback) criticalFeedback->push_back(counter);
-        }
+      //   if (critOTHIdx.count(i) > 0) {
+      //     if(criticalFeedback) criticalFeedback->push_back(counter);
+      //   }
         
-        counter++;
-      }
+      //   counter++;
+      // }
 
       return res;
     }
