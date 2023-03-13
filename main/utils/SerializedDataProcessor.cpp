@@ -38,164 +38,164 @@ unsigned int SerializedDataProcessor::getNumContexts() {
 
 
 void SerializedDataProcessor::populateOffsetUnit(SEXP ouContainer) {
-  // 
-  // ouContainer is expecting getNumContexts() number of contexts to be present
-  // 
+  // // 
+  // // ouContainer is expecting getNumContexts() number of contexts to be present
+  // // 
 
-  // An offset unit contains contextUnits
-  int ouIdx = rir::offsetUnit::contextsStartingIndex();
-  for (auto & ele : _reducedContextWiseData) {
-    // Case: V = 0, Just one binary
-    if (ele.second.size() == 1) {
+  // // An offset unit contains contextUnits
+  // int ouIdx = rir::offsetUnit::contextsStartingIndex();
+  // for (auto & ele : _reducedContextWiseData) {
+  //   // Case: V = 0, Just one binary
+  //   if (ele.second.size() == 1) {
 
-      rir::Protect protecc;
+  //     rir::Protect protecc;
 
-      SEXP cuContainer;
-      protecc(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(1)));
-      rir::contextUnit::addContext(cuContainer, ele.first);
-      rir::contextUnit::addVersioning(cuContainer, 0);
-      rir::contextUnit::addTFSlots(cuContainer, R_NilValue);
+  //     SEXP cuContainer;
+  //     protecc(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(1)));
+  //     rir::contextUnit::addContext(cuContainer, ele.first);
+  //     rir::contextUnit::addVersioning(cuContainer, 0);
+  //     rir::contextUnit::addTFSlots(cuContainer, R_NilValue);
 
-      std::pair<SEXP, SEXP> data = ele.second[0];
-      SEXP buContainer;
-      protecc(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
-      rir::binaryUnit::addEpoch(buContainer, data.first);
-      rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
-      rir::binaryUnit::addTVData(buContainer, R_NilValue);
+  //     std::pair<SEXP, SEXP> data = ele.second[0];
+  //     SEXP buContainer;
+  //     protecc(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
+  //     rir::binaryUnit::addEpoch(buContainer, data.first);
+  //     rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
+  //     rir::binaryUnit::addTVData(buContainer, R_NilValue);
       
 
-      // Add Binary unit to Context unit
-      rir::generalUtil::addSEXP(cuContainer, buContainer, rir::contextUnit::binsStartingIndex());
+  //     // Add Binary unit to Context unit
+  //     rir::generalUtil::addSEXP(cuContainer, buContainer, rir::contextUnit::binsStartingIndex());
 
 
-      // Add Context unit to Offset unit
-      rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
+  //     // Add Context unit to Offset unit
+  //     rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
 
-    } else if (_tvGraphData.find(ele.first) != _tvGraphData.end()) {
+  //   } else if (_tvGraphData.find(ele.first) != _tvGraphData.end()) {
 
-      TVCases++;
+  //     TVCases++;
 
-      TVGraph tvg = _tvGraphData[ele.first];
-      auto numTypeVersions = tvg.getNumTypeVersions();
+  //     TVGraph tvg = _tvGraphData[ele.first];
+  //     auto numTypeVersions = tvg.getNumTypeVersions();
 
       
-      if (numTypeVersions == 1) {
-        tvg.iterateOverTVs([&] (std::vector<uint32_t> slotData, std::vector<SEXP> generalSlotData, TVNode node) {
+  //     if (numTypeVersions == 1) {
+  //       tvg.iterateOverTVs([&] (std::vector<uint32_t> slotData, std::vector<SEXP> generalSlotData, TVNode node) {
 
-          auto nodeRes = node.get();
+  //         auto nodeRes = node.get();
 
-          // If number of type versions is one and the number of binaries is also one, V = 0
-          if (nodeRes.size() == 1) {
+  //         // If number of type versions is one and the number of binaries is also one, V = 0
+  //         if (nodeRes.size() == 1) {
 
-            rir::Protect protecc;
+  //           rir::Protect protecc;
 
-            SEXP cuContainer;
-            protecc(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(1)));
-            rir::contextUnit::addContext(cuContainer, ele.first);
-            rir::contextUnit::addVersioning(cuContainer, 0);
-            rir::contextUnit::addTFSlots(cuContainer, R_NilValue);
+  //           SEXP cuContainer;
+  //           protecc(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(1)));
+  //           rir::contextUnit::addContext(cuContainer, ele.first);
+  //           rir::contextUnit::addVersioning(cuContainer, 0);
+  //           rir::contextUnit::addTFSlots(cuContainer, R_NilValue);
 
-            std::pair<SEXP, SEXP> data = nodeRes[0];
-            SEXP buContainer;
-            protecc(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
-            rir::binaryUnit::addEpoch(buContainer, data.first);
-            rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
-            rir::binaryUnit::addTVData(buContainer, R_NilValue);
+  //           std::pair<SEXP, SEXP> data = nodeRes[0];
+  //           SEXP buContainer;
+  //           protecc(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
+  //           rir::binaryUnit::addEpoch(buContainer, data.first);
+  //           rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
+  //           rir::binaryUnit::addTVData(buContainer, R_NilValue);
 
-            // Add Binary unit to Context unit
-            rir::generalUtil::addSEXP(cuContainer, buContainer, rir::contextUnit::binsStartingIndex());
+  //           // Add Binary unit to Context unit
+  //           rir::generalUtil::addSEXP(cuContainer, buContainer, rir::contextUnit::binsStartingIndex());
 
 
-            // Add Context unit to Offset unit
-            rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
-          } else {
+  //           // Add Context unit to Offset unit
+  //           rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
+  //         } else {
 
-            rir::Protect protecc;
+  //           rir::Protect protecc;
 
-            // If number of type versions is one and the number of binaries is > 1, V = 1
-            SEXP cuContainer;
-            protecc(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(nodeRes.size())));
-            rir::contextUnit::addContext(cuContainer, ele.first);
-            rir::contextUnit::addVersioning(cuContainer, 1);
-            rir::contextUnit::addTFSlots(cuContainer, R_NilValue);
+  //           // If number of type versions is one and the number of binaries is > 1, V = 1
+  //           SEXP cuContainer;
+  //           protecc(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(nodeRes.size())));
+  //           rir::contextUnit::addContext(cuContainer, ele.first);
+  //           rir::contextUnit::addVersioning(cuContainer, 1);
+  //           rir::contextUnit::addTFSlots(cuContainer, R_NilValue);
 
-            int startIdx = rir::contextUnit::binsStartingIndex();
-            for (auto & data : nodeRes) {
-              SEXP buContainer;
-              rir::Protect protecc1;
+  //           int startIdx = rir::contextUnit::binsStartingIndex();
+  //           for (auto & data : nodeRes) {
+  //             SEXP buContainer;
+  //             rir::Protect protecc1;
 
-              protecc1(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
-              rir::binaryUnit::addEpoch(buContainer, data.first);
-              rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
-              rir::binaryUnit::addTVData(buContainer, R_NilValue);
+  //             protecc1(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
+  //             rir::binaryUnit::addEpoch(buContainer, data.first);
+  //             rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
+  //             rir::binaryUnit::addTVData(buContainer, R_NilValue);
 
-              // Add Binary unit to Context unit
-              rir::generalUtil::addSEXP(cuContainer, buContainer, startIdx);
-              startIdx++;
-            }
+  //             // Add Binary unit to Context unit
+  //             rir::generalUtil::addSEXP(cuContainer, buContainer, startIdx);
+  //             startIdx++;
+  //           }
 
-            // Add Context unit to Offset unit
-            rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
+  //           // Add Context unit to Offset unit
+  //           rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
 
-          }
+  //         }
           
-        });
-      } else {
-        rir::Protect protecc;
-        SEXP cuContainer;
-        protecc(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(tvg.getBinariesCount())));
-        rir::contextUnit::addContext(cuContainer, ele.first);
+  //       });
+  //     } else {
+  //       rir::Protect protecc;
+  //       SEXP cuContainer;
+  //       protecc(cuContainer = Rf_allocVector(VECSXP, rir::contextUnit::getContainerSize(tvg.getBinariesCount())));
+  //       rir::contextUnit::addContext(cuContainer, ele.first);
         
-        rir::contextUnit::addVersioning(cuContainer, 2);
+  //       rir::contextUnit::addVersioning(cuContainer, 2);
 
-        auto tvSolution = tvg.getSolutionSorted();
+  //       auto tvSolution = tvg.getSolutionSorted();
 
-        std::vector<int> genericFeedback;
-        std::vector<int> typeFeedback;
+  //       std::vector<int> genericFeedback;
+  //       std::vector<int> typeFeedback;
 
-        for (auto & slotIdx : tvSolution) {
-          if (slotIdx < tvg.getTypeFeedbackLen()) {
-            typeFeedback.push_back(slotIdx);
-          } else {
-            genericFeedback.push_back(slotIdx - tvg.getTypeFeedbackLen());
-          }
-        }
+  //       for (auto & slotIdx : tvSolution) {
+  //         if (slotIdx < tvg.getTypeFeedbackLen()) {
+  //           typeFeedback.push_back(slotIdx);
+  //         } else {
+  //           genericFeedback.push_back(slotIdx - tvg.getTypeFeedbackLen());
+  //         }
+  //       }
         
-        rir::contextUnit::addTFSlots(cuContainer, typeFeedback);
-        rir::contextUnit::addFBSlots(cuContainer, genericFeedback);
+  //       rir::contextUnit::addTFSlots(cuContainer, typeFeedback);
+  //       rir::contextUnit::addFBSlots(cuContainer, genericFeedback);
 
-        int startIdx = rir::contextUnit::binsStartingIndex();
-        tvg.iterateOverTVs([&] (std::vector<uint32_t> slotData, std::vector<SEXP> generalSlotData, TVNode node) {
-          auto nodeRes = node.get();
+  //       int startIdx = rir::contextUnit::binsStartingIndex();
+  //       tvg.iterateOverTVs([&] (std::vector<uint32_t> slotData, std::vector<SEXP> generalSlotData, TVNode node) {
+  //         auto nodeRes = node.get();
 
-          for (auto & data : nodeRes) {
-            SEXP buContainer;
-            rir::Protect protecc1;
-            protecc1(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
-            // std::cerr << "Creating BU: " << CHAR(PRINTNAME(data.first)) << std::endl;
-            // std::cerr << "  TV Slots: " << slotData.size() << std::endl;
-            // std::cerr << "  GFB Slots: " << generalSlotData.size() << std::endl;
+  //         for (auto & data : nodeRes) {
+  //           SEXP buContainer;
+  //           rir::Protect protecc1;
+  //           protecc1(buContainer = Rf_allocVector(VECSXP, rir::binaryUnit::getContainerSize()));
+  //           // std::cerr << "Creating BU: " << CHAR(PRINTNAME(data.first)) << std::endl;
+  //           // std::cerr << "  TV Slots: " << slotData.size() << std::endl;
+  //           // std::cerr << "  GFB Slots: " << generalSlotData.size() << std::endl;
 
-            rir::binaryUnit::addEpoch(buContainer, data.first);
-            rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
-            rir::binaryUnit::addTVData(buContainer, slotData);
-            rir::binaryUnit::addFBData(buContainer, generalSlotData);
+  //           rir::binaryUnit::addEpoch(buContainer, data.first);
+  //           rir::binaryUnit::addReqMap(buContainer, rir::contextData::getReqMapAsVector(data.second));
+  //           rir::binaryUnit::addTVData(buContainer, slotData);
+  //           rir::binaryUnit::addFBData(buContainer, generalSlotData);
             
-            // Add Binary unit to Context unit
-            rir::generalUtil::addSEXP(cuContainer, buContainer, startIdx);
-            startIdx++;
-          }
-        });
+  //           // Add Binary unit to Context unit
+  //           rir::generalUtil::addSEXP(cuContainer, buContainer, startIdx);
+  //           startIdx++;
+  //         }
+  //       });
 
-        // Add Context unit to Offset unit
-        rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
-      }
-    } else {
-      Rf_error("Invalid case while creating deserializer unit!");
-    }
+  //       // Add Context unit to Offset unit
+  //       rir::generalUtil::addSEXP(ouContainer, cuContainer, ouIdx);
+  //     }
+  //   } else {
+  //     Rf_error("Invalid case while creating deserializer unit!");
+  //   }
 
-    ouIdx++;
-  }
+  //   ouIdx++;
+  // }
 
 }
 
@@ -527,7 +527,7 @@ void SerializedDataProcessor::init() {
   }
 
 
-  for (int i = 0; i < contextsWithOneBinary.size(); i++) {
+  for (size_t i = 0; i < contextsWithOneBinary.size(); i++) {
 
     auto currC1 = contextsWithOneBinary[i];
     
@@ -538,7 +538,7 @@ void SerializedDataProcessor::init() {
     pref1 << _pathPrefix << CHAR(PRINTNAME(c1Ele.first));
     OBAHolder r1(pref1.str(), c1Ele.second);
 
-    for (int j = i + 1; j < contextsWithOneBinary.size(); j++) {
+    for (size_t j = i + 1; j < contextsWithOneBinary.size(); j++) {
 
       auto currC2 = contextsWithOneBinary[j];
 
