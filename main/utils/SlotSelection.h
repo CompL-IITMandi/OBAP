@@ -208,7 +208,7 @@ public:
             ssg.addBinaries(ele.second);
             ssg.init();
             // ssg.print(std::cout, 4);
-            ssg.findSolution(solnHolder, recurse);
+            ssg.findSolution(solnHolder, false);
           }
         }
 
