@@ -109,7 +109,9 @@ public:
       auto currDiff = FeedbackVector::getDiff(w.first, w.second);
       assert(currDiff.size() > 0);
       for (auto & ele : currDiff) {
-        res.insert(ele);
+        if (sol.count(ele) == 0) { // Prevent addition of already added solutions
+          res.insert(ele);
+        }
       }
     }
     return res;
@@ -174,8 +176,7 @@ public:
     return res;
   }
 
-  void findSolution(SlotSelectionSolution * solnHolder = nullptr) {
-    used.insert(_criteria);
+  void findSolution(SlotSelectionSolution * solnHolder = nullptr, bool recurse = false) {
     assert(solve(_worklist, _solution));
 
     // std::vector<std::set<SBinary, std::set<size_t>>> res;
@@ -184,7 +185,7 @@ public:
       if (ele.second.size() == 1) {
         solnHolder->addSolution(_criteria, ele.second, _fsolution);
         // _finalSolution.push_back(std::set<SBinary, std::set<size_t>>(ele.second[0], _fsolution));
-      } else {
+      } else if (recurse) {
         // printSpace(2);
         // std::cout << "solving recursively" << std::endl;
         std::set<SEXP> H = getSpeculativeContextUnion(ele.second);
@@ -207,16 +208,13 @@ public:
             ssg.addBinaries(ele.second);
             ssg.init();
             // ssg.print(std::cout, 4);
-            ssg.findSolution(solnHolder);
+            ssg.findSolution(solnHolder, recurse);
           }
         }
 
       }
       
     }
-
-    used.erase(_criteria);
-
     // return res;
   }
 
@@ -235,26 +233,35 @@ public:
       }
       return false;
     }
-    std::set<size_t> possibleSolutions = getPossibleSolutions(wl, sol);
-    std::vector<size_t> sortedSolutions = getSortedByReduction(possibleSolutions, wl);
-    for (unsigned int j = 1; j < sortedSolutions.size(); j ++) {
-      if ((j + sol.size()) > BUDGET) return false;
-      // Iterate over combinations of size j
-      CombinationsIndexArray combos(sortedSolutions.size(), j);
-      do {
-        // union of existing solution set with to-try solution set
-        std::set<size_t> nextSol(sol.begin(), sol.end());
-        for (int i = 0; i < combos.size(); i++) {
-          nextSol.insert(sortedSolutions[combos[i]]);
-        }
 
-        std::vector<std::pair<FeedbackVector, FeedbackVector>> resWl = reduceWorklist(wl, nextSol);
-        if (solve(resWl, nextSol)) return true;
+    if (sol.size() + 1 > BUDGET) return false;
+    std::set<size_t> possibleSolutions = getPossibleSolutions(wl, sol); // n
+    std::vector<size_t> sortedSolutions = getSortedByReduction(possibleSolutions, wl); // nlogn
 
-      } while (combos.advance());
-
-    }
+    std::set<size_t> nextSol(sol.begin(), sol.end()); // b + nlogn
+    nextSol.insert(sortedSolutions[0]); // Highest number of reductions
+    std::vector<std::pair<FeedbackVector, FeedbackVector>> resWl = reduceWorklist(wl, nextSol); // b + nlogn
+    if (solve(resWl, nextSol)) return true;
     return false;
+
+  //   for (unsigned int j = 1; j < sortedSolutions.size(); j ++) {
+  //     if ((j + sol.size()) > BUDGET) return false;
+  //     // Iterate over combinations of size j
+  //     CombinationsIndexArray combos(sortedSolutions.size(), j);
+  //     do {
+  //       // union of existing solution set with to-try solution set
+  //       std::set<size_t> nextSol(sol.begin(), sol.end());
+  //       for (int i = 0; i < combos.size(); i++) {
+  //         nextSol.insert(sortedSolutions[combos[i]]);
+  //       }
+
+  //       std::vector<std::pair<FeedbackVector, FeedbackVector>> resWl = reduceWorklist(wl, nextSol);
+  //       if (solve(resWl, nextSol)) return true;
+
+  //     } while (combos.advance());
+
+  //   }
+  //   return false;
   }
 
   std::vector<std::pair<FeedbackVector, FeedbackVector>> reduceWorklist(std::vector<std::pair<FeedbackVector, FeedbackVector>> wl, std::set<size_t> sol) {

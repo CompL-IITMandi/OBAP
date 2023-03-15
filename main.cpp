@@ -251,7 +251,7 @@ static void iterateOverMetadatasInDirectory() {
             ssg.init();
             // ssg.print(std::cout, 2);
             SlotSelectionSolution solnHolder;
-            ssg.findSolution(&solnHolder);
+            ssg.findSolution(&solnHolder, true);
             // solnHolder.print(std::cout, 4);
             sBins.addSolution(context, solnHolder.get());
           }

@@ -3,26 +3,10 @@
 #include "Rinternals.h"
 #include "runtime/Context.h"
 #include <vector>
-
+#include "utils/Debug.h"
 namespace rir {
 class desSElement {
-  template <typename T>
-  static void addTToContainer(SEXP container, const int & index, T val) {
-      rir::Protect protecc;
-      SEXP store;
-      protecc(store = Rf_allocVector(RAWSXP, sizeof(T)));
-      T * tmp = (T *) DATAPTR(store);
-      *tmp = val;
 
-      SET_VECTOR_ELT(container, index, store);
-  }
-
-  template <typename T>
-  static T getTFromContainer(SEXP container, const int & index) {
-      SEXP dataContainer = VECTOR_ELT(container, index);
-      T* res = (T *) DATAPTR(dataContainer);
-      return *res;
-  }
 public:
   static size_t getContainerSize() { return 4; }
   //
@@ -44,7 +28,7 @@ public:
   // 3: Store
   //
   static void addVal(SEXP container, uint32_t data) { addTToContainer<uint32_t>(container, 3, data); }
-  static size_t getValUint(SEXP container) { return getTFromContainer<uint32_t>(container, 3); }
+  static uint32_t getValUint(SEXP container) { return getTFromContainer<uint32_t>(container, 3); }
   static void addVal(SEXP container, SEXP data) { SET_VECTOR_ELT(container, 3, data); }
   static SEXP getValSEXP(SEXP container) { return VECTOR_ELT(container, 3); }
 
