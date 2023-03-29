@@ -110,6 +110,10 @@ public:
     return _container[idx];
   }
 
+  std::vector<SCElement> getContainer() {
+    return _container;
+  }
+
   size_t size() {
     return _container.size();
   }
@@ -146,6 +150,10 @@ public:
       FeedbackVector fv(currCon);
       _container.emplace(currHast,fv);
     }
+  }
+
+  std::unordered_map<SEXP, FeedbackVector> getContainer() {
+    return _container;
   }
 
   bool containsVector(SEXP hast) {

@@ -66,40 +66,16 @@ public:
     for (auto & ele : _nodes) {
       v.push_back(ele.first);
     }
-
     for (size_t i = 0; i < v.size() - 1; i++) {
       for (size_t j = i+1; j < v.size(); j++) {
         _worklist.push_back(std::pair<FeedbackVector,FeedbackVector>(v[i],v[j]));
       }
     }
-
     // Reduce using trivial solutions
     auto triv = getTrivialSolutions();
-
-    // int space = 2;
-    // printSpace(space + 2, std::cout);
-    // std::cout << "╠═([init]worklist=" << _worklist.size() << ")" << std::endl;
-    // for (auto & ele : _worklist) {
-    //   printSpace(space + 4, std::cout);
-    //   std::cout << "(" << ele.first.getUID() << "," << ele.second.getUID() << ")" << std::endl;
-    // }
-    // printSpace(space + 2, std::cout);
-    // std::cout << "╠═([triv]worklist=" << triv.second.size() << ")" << std::endl;
-    // for (auto & ele : triv.second) {
-    //   printSpace(space + 4, std::cout);
-    //   std::cout << "(" << ele.first.getUID() << "," << ele.second.getUID() << ")" << std::endl;
-    // }
-    // printSpace(space + 4, std::cout);
-    // std::cout << "╠═(solution=" << triv.first.size() << "): [ ";
-    // for (auto & ele : triv.first) {
-    //   std::cout << ele << " ";
-    // }
-    // std::cout << " ]" << std::endl;
-
     _solution = triv.first;
     _worklist = triv.second;
     if (_solution.size() > BUDGET) return false;
-
     return true;
   }
 
@@ -127,14 +103,6 @@ public:
   }
 
   std::vector<size_t> getSortedByReduction(std::set<size_t> possibleSolutions, const std::vector<std::pair<FeedbackVector, FeedbackVector>> & wl) {
-    // int space = 0;
-    // printSpace(space + 4, std::cout);
-    // std::cout << "╠═(OriginalList): [ ";
-    // for (auto & ele : possibleSolutions) {
-    //   std::cout << ele << " ";
-    // }
-    // std::cout << "]" << std::endl;
-
     std::vector<Reducer> sol;
     std::vector<size_t> res;
     for (auto & s : possibleSolutions) {
@@ -143,25 +111,10 @@ public:
       auto tWl = reduceWorklist(wl, tSol);
       sol.push_back({s, tWl.size()});
     }
-    std::sort(sol.begin(), sol.end(), reducerSortPredicate);
-    
-    // printSpace(space + 4, std::cout);
-    // std::cout << "╠═(Sorted): [ ";
-    // for (auto & s : sol) {
-    //   std::cout << "<" << s.solIdx << "," << s.newWl << "> ";
-    // }
-    // std::cout << "]" << std::endl;
-    
+    std::sort(sol.begin(), sol.end(), reducerSortPredicate);        
     for (auto & ele : sol) {
       res.push_back(ele.solIdx);
     }
-
-    // printSpace(space + 4, std::cout);
-    // std::cout << "╠═(Res): [ ";
-    // for (auto & r : res) {
-    //   std::cout << r << " ";
-    // }
-    // std::cout << "]" << std::endl;
     return res;
   }
 
@@ -178,16 +131,10 @@ public:
 
   void findSolution(SlotSelectionSolution * solnHolder = nullptr, bool recurse = false) {
     assert(solve(_worklist, _solution));
-
-    // std::vector<std::set<SBinary, std::set<size_t>>> res;
-
     for (auto & ele : _nodes) {
       if (ele.second.size() == 1) {
         solnHolder->addSolution(_criteria, ele.second, _fsolution);
-        // _finalSolution.push_back(std::set<SBinary, std::set<size_t>>(ele.second[0], _fsolution));
       } else if (recurse) {
-        // printSpace(2);
-        // std::cout << "solving recursively" << std::endl;
         std::set<SEXP> H = getSpeculativeContextUnion(ele.second);
         std::unordered_map<SEXP, std::vector<SBinary>> recurseMap;
         for (auto & hast : H) {
@@ -197,25 +144,17 @@ public:
             }
           }
         }
-
-        // std::unordered_map<SBinary, std::set<size_t>> finSol;
-        // printSpace(2);
-        // std::cout << "Working with recurse map" << std::endl;
         for (auto & ele : recurseMap) {
           if (used.count(ele.first) > 0) continue;
           if (ele.second.size() > 1) {
             SlotSelectionGraph ssg(ele.first);
             ssg.addBinaries(ele.second);
             ssg.init();
-            // ssg.print(std::cout, 4);
             ssg.findSolution(solnHolder, false);
           }
         }
-
       }
-      
     }
-    // return res;
   }
 
   bool solve(std::vector<std::pair<FeedbackVector, FeedbackVector>> wl, std::set<size_t> sol) {
@@ -223,12 +162,6 @@ public:
     if (wl.size() == 0) {
       if (sol.size() <= BUDGET) {
         _fsolution = sol;
-        // std::cout << "Found Solution(criteria=" << CHAR(PRINTNAME(_criteria)) << "): [ ";
-        // for (auto & s : _fsolution) {
-        //   std::cout << s << " ";
-        // }
-        // std::cout << "]" << std::endl;
-        
         return true;
       }
       return false;
@@ -237,31 +170,11 @@ public:
     if (sol.size() + 1 > BUDGET) return false;
     std::set<size_t> possibleSolutions = getPossibleSolutions(wl, sol); // n
     std::vector<size_t> sortedSolutions = getSortedByReduction(possibleSolutions, wl); // nlogn
-
     std::set<size_t> nextSol(sol.begin(), sol.end()); // b + nlogn
     nextSol.insert(sortedSolutions[0]); // Highest number of reductions
     std::vector<std::pair<FeedbackVector, FeedbackVector>> resWl = reduceWorklist(wl, nextSol); // b + nlogn
     if (solve(resWl, nextSol)) return true;
     return false;
-
-  //   for (unsigned int j = 1; j < sortedSolutions.size(); j ++) {
-  //     if ((j + sol.size()) > BUDGET) return false;
-  //     // Iterate over combinations of size j
-  //     CombinationsIndexArray combos(sortedSolutions.size(), j);
-  //     do {
-  //       // union of existing solution set with to-try solution set
-  //       std::set<size_t> nextSol(sol.begin(), sol.end());
-  //       for (int i = 0; i < combos.size(); i++) {
-  //         nextSol.insert(sortedSolutions[combos[i]]);
-  //       }
-
-  //       std::vector<std::pair<FeedbackVector, FeedbackVector>> resWl = reduceWorklist(wl, nextSol);
-  //       if (solve(resWl, nextSol)) return true;
-
-  //     } while (combos.advance());
-
-  //   }
-  //   return false;
   }
 
   std::vector<std::pair<FeedbackVector, FeedbackVector>> reduceWorklist(std::vector<std::pair<FeedbackVector, FeedbackVector>> wl, std::set<size_t> sol) {

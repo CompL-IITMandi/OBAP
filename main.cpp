@@ -32,6 +32,7 @@ std::string outputPath;
 std::string inputPath;
 
 static int obapDEBUG = getenv("OBAP_DBG") ? std::stoi(getenv("OBAP_DBG")) : 0;
+static bool completeSpeculativeContext = getenv("COMPLETE_CONTEXT") ? getenv("COMPLETE_CONTEXT")[0] == '1' : false;
 
 static std::vector<SEXP> getDeserializerBinaries(rir::Protect & protecc, SEXP hast, std::unordered_map<SEXP, SpecializedBinaries> deserializerMap) {
   std::vector<SEXP> finalBinaries;
@@ -54,7 +55,48 @@ static std::vector<SEXP> getDeserializerBinaries(rir::Protect & protecc, SEXP ha
         rir::deserializerBinary::addContext(binStore, context.toI());
         rir::deserializerBinary::addDependencies(binStore, binary.getDependencies());
         rir::deserializerBinary::addEpoch(binStore, binary.getEpochAsSEXP());
-        if (soln.count(binary) > 0) {
+
+        if (completeSpeculativeContext) {
+
+          auto _container = currSpeculativeContext.getContainer();
+
+          std::vector<SEXP> scVec;
+
+          for (auto & ele : _container) {
+            SEXP criteria = ele.first;
+            std::vector<SCElement> currCriteriaFeedback = ele.second.getContainer();
+
+            unsigned i = 0;
+            for (auto & e : currCriteriaFeedback) {
+              SEXP scContainer = e.getContainer();
+              auto tag = rir::speculativeContextElement::getTag(scContainer);
+              SEXP store;
+              protecc(store = Rf_allocVector(VECSXP,rir::desSElement::getContainerSize()));
+              rir::desSElement::addCriteria(store, criteria);
+              rir::desSElement::addOffset(store, i++);
+              rir::desSElement::addTag(store, tag);
+              if (tag == 0 || tag == 1) {
+                rir::desSElement::addVal(store, rir::speculativeContextElement::getValUint(scContainer));
+              } else {
+                rir::desSElement::addVal(store, rir::speculativeContextElement::getValSEXP(scContainer));
+              }
+
+              // std::cout << "==(desSElement): ";
+              // desSElement::print(store, std::cout);
+              // std::cout << std::endl;
+              scVec.push_back(store);
+            }
+            
+          }
+
+          SEXP scStore;
+          protecc(scStore = Rf_allocVector(VECSXP,scVec.size()));
+          for (size_t i = 0; i < scVec.size(); i++) {
+            SET_VECTOR_ELT(scStore, i, scVec[i]);
+          }
+
+          rir::deserializerBinary::addSpeculativeContext(binStore, scStore);
+        } else if (soln.count(binary) > 0) {
           auto currSlotSelSolution = soln[binary].getSolution();
           std::vector<SEXP> scVec;
 
@@ -241,21 +283,22 @@ static void iterateOverMetadatasInDirectory() {
         offsetMapHandler.iterate([&] (SEXP offsetIndex, SEXP contextMap) {
           SpecializedBinaries sBins(contextMap, offsetIndex, hast, rir::serializerData::getName(serDataContainer));
           sBins.reduceRedundantBinaries();
-          
-          for (auto & context : sBins.getContexts()) {
-            if (sBins.getBinaries(context).size() == 1) continue;
-            // printSpace(2);
-            // std::cout << "█[SOLUTION]█══(context=" << context << ")" << std::endl;
-            SlotSelectionGraph ssg(hast); // starting criteria is always the main 'Hast'
-            ssg.addBinaries(sBins.getBinaries(context));
-            ssg.init();
-            // ssg.print(std::cout, 2);
-            SlotSelectionSolution solnHolder;
-            ssg.findSolution(&solnHolder, true);
-            // solnHolder.print(std::cout, 4);
-            sBins.addSolution(context, solnHolder.get());
-          }
 
+          if (!completeSpeculativeContext) {
+            for (auto & context : sBins.getContexts()) {
+              if (sBins.getBinaries(context).size() == 1) continue;
+              // printSpace(2);
+              // std::cout << "█[SOLUTION]█══(context=" << context << ")" << std::endl;
+              SlotSelectionGraph ssg(hast); // starting criteria is always the main 'Hast'
+              ssg.addBinaries(sBins.getBinaries(context));
+              ssg.init();
+              // ssg.print(std::cout, 2);
+              SlotSelectionSolution solnHolder;
+              ssg.findSolution(&solnHolder, true);
+              // solnHolder.print(std::cout, 4);
+              sBins.addSolution(context, solnHolder.get());
+            }
+          }
           sBins.print(std::cout, 0);
           deserializerMap.emplace(offsetIndex, sBins);
         });

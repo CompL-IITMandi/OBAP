@@ -91,7 +91,7 @@ namespace rir {
                 default:
                 std::cout << "ERR!,"; break;
             }
-            std::cout << getPC(container) << ",";
+            // std::cout << getPC(container) << ",";
             std::cout << (getPOD(container) ? "D" : "U") << ",";
             switch(getTag(container)) {
                 case 0:
