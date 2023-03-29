@@ -13,7 +13,7 @@ public:
     auto tag = rir::speculativeContextElement::getTag(container);
     std::stringstream ss;
     ss << tag << "_";
-    if (tag == 0 || tag == 1) {
+    if (tag == 0 || tag == 1 || tag == 3 || tag == 4) {
       ss << rir::speculativeContextElement::getValUint(container);
     } else {
       SEXP val = rir::speculativeContextElement::getValSEXP(container);

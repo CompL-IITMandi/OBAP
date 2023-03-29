@@ -75,7 +75,7 @@ static std::vector<SEXP> getDeserializerBinaries(rir::Protect & protecc, SEXP ha
               rir::desSElement::addCriteria(store, criteria);
               rir::desSElement::addOffset(store, i++);
               rir::desSElement::addTag(store, tag);
-              if (tag == 0 || tag == 1) {
+              if (tag == 0 || tag == 1 || tag == 3 || tag == 4) {
                 rir::desSElement::addVal(store, rir::speculativeContextElement::getValUint(scContainer));
               } else {
                 rir::desSElement::addVal(store, rir::speculativeContextElement::getValSEXP(scContainer));
@@ -113,7 +113,7 @@ static std::vector<SEXP> getDeserializerBinaries(rir::Protect & protecc, SEXP ha
               rir::desSElement::addCriteria(store, criteria);
               rir::desSElement::addOffset(store, s);
               rir::desSElement::addTag(store, tag);
-              if (tag == 0 || tag == 1) {
+              if (tag == 0 || tag == 1 || tag == 3 || tag == 4) {
                 rir::desSElement::addVal(store, rir::speculativeContextElement::getValUint(scContainer));
               } else {
                 rir::desSElement::addVal(store, rir::speculativeContextElement::getValSEXP(scContainer));
@@ -148,7 +148,7 @@ static std::vector<SEXP> getDeserializerBinaries(rir::Protect & protecc, SEXP ha
             rir::desSElement::addCriteria(store, hast);
             rir::desSElement::addOffset(store, s);
             rir::desSElement::addTag(store, tag);
-            if (tag == 0 || tag == 1) {
+            if (tag == 0 || tag == 1 || tag == 3 || tag == 4) {
               rir::desSElement::addVal(store, rir::speculativeContextElement::getValUint(scContainer));
             } else {
               rir::desSElement::addVal(store, rir::speculativeContextElement::getValSEXP(scContainer));

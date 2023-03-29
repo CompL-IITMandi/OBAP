@@ -35,7 +35,7 @@ public:
   static void print(SEXP container, std::ostream& out) {
     auto tag = getTag(container);
     out << "[" << CHAR(PRINTNAME(getCriteria(container))) << "," << getOffset(container) << "," << tag << ",";
-    if (tag == 0 || tag == 1) {
+    if (tag == 0 || tag == 1 || tag == 3 || tag == 4) {
       out << getValUint(container) << "]";
     } else {
       SEXP val = getValSEXP(container);
