@@ -70,7 +70,12 @@ static std::vector<SEXP> getDeserializerBinaries(rir::Protect & protecc, SEXP ha
             unsigned i = 0;
             for (auto & e : currCriteriaFeedback) {
 
-              if (!e.isDeopt() || e.getTag() == 3 || e.getTag() == 4) {
+              if (e.getTag() == 3 || e.getTag() == 4) {
+                if (e.getValUint() == 0) {
+                  i++; continue;
+                }
+              } 
+              if (!e.isDeopt()) {
                 i++; continue;
               }
 

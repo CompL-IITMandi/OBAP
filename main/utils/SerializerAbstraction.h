@@ -39,6 +39,10 @@ public:
     }
   }
 
+  uint32_t getValUint() {
+    return rir::speculativeContextElement::getValUint(_container);
+  }
+
   int getTag() {
     return rir::speculativeContextElement::getTag(_container);
   }
