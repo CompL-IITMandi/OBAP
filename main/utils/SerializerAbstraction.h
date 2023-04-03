@@ -39,6 +39,10 @@ public:
     }
   }
 
+  int getTag() {
+    return rir::speculativeContextElement::getTag(_container);
+  }
+
   size_t getConvertedId() const {
     return conversionMap[_name];
   }
